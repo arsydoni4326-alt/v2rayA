@@ -23,6 +23,7 @@ We are committed to providing the simplest operation and meeting most needs. Tha
 - **Automatic Updates:** Auto-update PAC files, GFW lists, and subscriptions
 - **Routing rules:** Powerful routing capabilities based on RoutingA and V2Ray/XRay routing
 - **Containerized:** Official Docker images available
+- **Live Flow Visualization:** Real-time animated dashboard of proxy traffic flows (planned feature)
 
 ## Architecture
 
@@ -34,6 +35,9 @@ Please refer to [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed archit
 - [Specification](docs/SPECIFICATION.md)
 - [Contributing](docs/CONTRIBUTING.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Live Flow Visualization Plan](docs/PHASE_LIVE_FLOW_PLAN.md)
+- [Live Flow Implementation Guide](docs/LIVE_FLOW_IMPLEMENTATION.md)
+- [Live Flow User Guide](docs/LIVE_FLOW_USER_GUIDE.md)
 - [Official Documentation](https://v2raya.org/en/docs/prologue/introduction/)
 
 ## Installation

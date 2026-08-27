@@ -8,6 +8,8 @@ export default new Vuex.Store({
     nav: "",
     running: i18n.t("common.checkRunning"),
     connectedServer: {},
+    liveFlows: [],
+    liveFlowConnected: false,
   },
   mutations: {
     NAV(state, val) {
@@ -19,7 +21,67 @@ export default new Vuex.Store({
     CONNECTED_SERVER(state, val) {
       state.connectedServer = val;
     },
+    SET_LIVE_FLOW_CONNECTED(state, val) {
+      state.liveFlowConnected = val;
+    },
+    SET_LIVE_FLOWS(state, flows) {
+      state.liveFlows = flows;
+    },
+    ADD_LIVE_FLOW(state, flow) {
+      // Check if flow already exists
+      const existingIndex = state.liveFlows.findIndex(
+        (f) => f.session_id === flow.session_id
+      );
+      if (existingIndex === -1) {
+        state.liveFlows.push(flow);
+      }
+    },
+    UPDATE_LIVE_FLOW(state, update) {
+      const index = state.liveFlows.findIndex(
+        (f) => f.session_id === update.session_id
+      );
+      if (index !== -1) {
+        // Update the flow with new data
+        Vue.set(state.liveFlows, index, {
+          ...state.liveFlows[index],
+          bytes_sent: update.bytes_sent,
+          bytes_recv: update.bytes_recv,
+          speed_bps: update.speed_bps,
+          last_activity: update.last_activity,
+          status: update.status,
+        });
+      }
+    },
+    REMOVE_LIVE_FLOW(state, sessionId) {
+      const index = state.liveFlows.findIndex(
+        (f) => f.session_id === sessionId
+      );
+      if (index !== -1) {
+        state.liveFlows.splice(index, 1);
+      }
+    },
   },
-  actions: {},
+  actions: {
+    connectLiveFlow({ commit }, token) {
+      import("../plugins/liveflow").then((module) => {
+        const liveFlowService = module.default;
+        liveFlowService.on("connected", () => {
+          commit("SET_LIVE_FLOW_CONNECTED", true);
+        });
+        liveFlowService.on("disconnected", () => {
+          commit("SET_LIVE_FLOW_CONNECTED", false);
+        });
+        liveFlowService.connect(token);
+      });
+    },
+    disconnectLiveFlow({ commit }) {
+      import("../plugins/liveflow").then((module) => {
+        const liveFlowService = module.default;
+        liveFlowService.disconnect();
+        commit("SET_LIVE_FLOW_CONNECTED", false);
+        commit("SET_LIVE_FLOWS", []);
+      });
+    },
+  },
   modules: {},
 });
