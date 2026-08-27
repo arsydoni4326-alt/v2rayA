@@ -611,6 +611,9 @@
             </b-table>
           </b-field>
         </b-tab-item>
+        <b-tab-item label="LIVE FLOW">
+          <LiveFlowDashboard />
+        </b-tab-item>
       </b-tabs>
     </div>
     <b-loading v-else :is-full-page="true" :active="true">
@@ -769,13 +772,14 @@ import ModalServer from "@/components/modalServer";
 import ModalSubscription from "@/components/modalSubcription";
 import ModalSharing from "@/components/modalSharing";
 import ModalPickProxyGroup from "@/components/modalPickProxyGroup";
+import LiveFlowDashboard from "@/components/liveFlowDashboard";
 import { waitingConnected } from "@/assets/js/networkInspect";
 import axios from "@/plugins/axios";
 import dayjs from "dayjs";
 
 export default {
   name: "Node",
-  components: { ModalSubscription, ModalServer },
+  components: { ModalSubscription, ModalServer, LiveFlowDashboard },
   filters: {
     unix2datetime(x) {
       x = dayjs.unix(x);

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/v2rayA/v2rayA/kernel/v2ray"
 	"github.com/v2rayA/v2rayA/pkg/util/log"
 )
 
@@ -272,8 +273,16 @@ func GenerateSessionID() string {
 
 // subscribeToLiveFlowEvents subscribes to live flow events from the kernel
 func (h *LiveFlowHandler) subscribeToLiveFlowEvents() {
-	// This is a placeholder for future integration with the kernel's LiveFlowProducer
-	// For now, we'll just log that we're ready to receive events
+	// Get the LiveFlowProducer singleton
+	producer := v2ray.GetLiveFlowProducer()
+	if producer == nil {
+		log.Error("LiveFlow producer not available")
+		return
+	}
+
+	// Start the producer if not already started
+	producer.Start()
+
 	log.Info("LiveFlow handler subscribed to live flow events")
 }
 func (h *LiveFlowHandler) EndSession(sessionID string, reason string) {

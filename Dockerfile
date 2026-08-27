@@ -46,12 +46,12 @@ COPY --from=builder /build/service/v2raya /usr/bin/
 ENV TZ="Asia/Jakarta"
 RUN [ ! -f /etc/localtime ] && ln -s /usr/share/zoneinfo/\$TZ /etc/localtime; \
     echo \$TZ > /etc/timezone
-    RUN set -eux;     \
+RUN set -eux;     \
     apt update -y; \
     apt install -y --no-install-recommends       \
-    ca-certificates       \
-    build-essential       \
-    wget;     \
+        ca-certificates       \
+        build-essential       \
+        wget;     \
     apt-mark showmanual > /savedAptMark.txt
 RUN set -eux;     \
     wget -O /usr/local/share/v2ray/LoyalsoldierSite.dat https://raw.githubusercontent.com/mzz2017/dist-v2ray-rules-dat/master/geosite.dat

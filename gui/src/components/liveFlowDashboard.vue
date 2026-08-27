@@ -193,10 +193,23 @@ export default {
 
 .status-indicator.connected {
   background-color: #4caf50;
+  animation: pulse 2s infinite;
 }
 
 .status-indicator.disconnected {
   background-color: #f44336;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
 }
 
 .live-flow-controls {
@@ -261,6 +274,18 @@ export default {
   padding: 15px;
   margin-bottom: 15px;
   transition: all 0.3s ease;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .flow-card.active {
@@ -343,6 +368,22 @@ export default {
 .arrow-icon {
   font-size: 20px;
   color: #666;
+  animation: flow 1.5s infinite;
+}
+
+@keyframes flow {
+  0% {
+    opacity: 0.5;
+    transform: translateX(-2px);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(2px);
+  }
+  100% {
+    opacity: 0.5;
+    transform: translateX(-2px);
+  }
 }
 
 .protocol-badge {
