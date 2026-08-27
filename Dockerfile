@@ -2,7 +2,7 @@ FROM --platform=$BUILDPLATFORM node:22-alpine AS builder-web
 WORKDIR /app
 COPY ./gui/package.json .
 RUN yarn install
-COPY ./gui ./gui
+COPY ./gui .
 RUN echo "network-timeout 600000" >> .yarnrc
 RUN yarn config set registry https://registry.npm.taobao.org
 RUN yarn config set sass_binary_site https://cdn.npm.taobao.org/dist/node-sass -g
