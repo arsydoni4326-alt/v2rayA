@@ -1,6 +1,6 @@
 FROM --platform=$BUILDPLATFORM node:22-alpine AS builder-web
 WORKDIR /app
-COPY ./gui/package.json .
+COPY ./gui/package.json ./gui/yarn.lock ./
 RUN yarn install
 COPY ./gui .
 RUN echo "network-timeout 600000" >> .yarnrc
