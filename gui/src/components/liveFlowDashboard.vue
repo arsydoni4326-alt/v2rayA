@@ -180,7 +180,7 @@ export default {
 
     // Start debug info refresh
     this._debugTimer = setInterval(() => {
-      this-refreshDebugInfo();
+      this.refreshDebugInfo();
     }, 3000);
   },
   beforeDestroy() {

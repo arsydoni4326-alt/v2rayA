@@ -38,12 +38,21 @@ func JWTAuth(Admin bool) gin.HandlerFunc {
 		)
 		if err != nil {
 			if errors.Is(err, request.ErrNoTokenInRequest) {
+				// Try extracting from Authorization argument (header)
 				token, err = request.ParseFromRequest(ctx.Request, AuthorizationArgumentExtractor,
 					func(token *jwt.Token) (interface{}, error) {
 						return getSecret(), nil
 					},
 					request.WithParser(parser),
 				)
+			}
+			// If still no token, try query parameter (for WebSocket connections)
+			if err != nil && errors.Is(err, request.ErrNoTokenInRequest) {
+				if queryToken := ctx.Query("token"); queryToken != "" {
+					token, err = jwt.ParseWithClaims(queryToken, jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
+						return getSecret(), nil
+					}, jwt.WithValidMethods([]string{"HS256"}))
+				}
 			}
 			if err != nil {
 				common.Response(ctx, common.UNAUTHORIZED, err.Error())
