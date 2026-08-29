@@ -77,27 +77,33 @@ class LiveFlowService {
    * Handle incoming WebSocket messages
    */
   handleMessage(message) {
-    const { type, data } = message;
+    // Backend sends "body", not "data" — support both for compatibility
+    const { type, body, data } = message;
+    const payload = body || data;
 
     switch (type) {
       case "flow_start":
-        this.emit("flowStart", data);
-        this.updateStoreFlowStart(data);
+        this.emit("flowStart", payload);
+        this.updateStoreFlowStart(payload);
         break;
       case "flow_update":
-        this.emit("flowUpdate", data);
-        this.updateStoreFlowUpdate(data);
+        this.emit("flowUpdate", payload);
+        this.updateStoreFlowUpdate(payload);
         break;
       case "flow_end":
-        this.emit("flowEnd", data);
-        this.updateStoreFlowEnd(data);
+        this.emit("flowEnd", payload);
+        this.updateStoreFlowEnd(payload);
         break;
       case "batch_state":
-        this.emit("batchState", data);
-        this.updateStoreBatchState(data);
+        this.emit("batchState", payload);
+        this.updateStoreBatchState(payload);
+        break;
+      case "observatory":
+        this.emit("observatory", payload);
+        this.updateStoreObservatory(message.produce_time, payload);
         break;
       case "error":
-        this.emit("flowError", data);
+        this.emit("flowError", payload);
         break;
       default:
         console.log("[LiveFlow] Unknown message type:", type);
@@ -130,6 +136,130 @@ class LiveFlowService {
    */
   updateStoreBatchState(data) {
     store.commit("SET_LIVE_FLOWS", data.sessions);
+  }
+
+  /**
+   * Update Vuex store with observatory outbound status data.
+   * Transforms each outboundStatus entry into a flow-compatible card
+   * so the LiveFlowDashboard can display them with animations.
+   * Collects warnings for any malformed entries.
+   */
+  updateStoreObservatory(produceTime, body) {
+    const warnings = [];
+
+    if (!body || typeof body !== "object") {
+      warnings.push({
+        time: Date.now(),
+        message: "Observatory message body is missing or not an object",
+        raw: body,
+      });
+      console.warn("[LiveFlow] Observatory body invalid:", body);
+      store.commit("SET_LIVE_FLOW_WARNINGS", warnings);
+      return;
+    }
+
+    if (!Array.isArray(body.outboundStatus)) {
+      warnings.push({
+        time: Date.now(),
+        message: `outboundStatus is not an array (got ${typeof body.outboundStatus})`,
+        raw: body.outboundStatus,
+      });
+      console.warn(
+        "[LiveFlow] outboundStatus is not an array:",
+        body.outboundStatus
+      );
+      store.commit("SET_LIVE_FLOW_WARNINGS", warnings);
+      return;
+    }
+
+    const outboundName = body.outboundName || "unknown";
+
+    const flows = body.outboundStatus
+      .map((status, index) => {
+        if (!status || typeof status !== "object") {
+          warnings.push({
+            time: Date.now(),
+            message: `outboundStatus[${index}] is not an object`,
+            raw: status,
+          });
+          console.warn(
+            `[LiveFlow] outboundStatus[${index}] invalid:`,
+            status
+          );
+          return null;
+        }
+
+        if (typeof status.outbound_tag !== "string" || !status.outbound_tag) {
+          warnings.push({
+            time: Date.now(),
+            message: `outboundStatus[${index}] missing or invalid outbound_tag`,
+            raw: status,
+          });
+          console.warn(
+            `[LiveFlow] outboundStatus[${index}] missing outbound_tag:`,
+            status
+          );
+        }
+
+        if (typeof status.alive !== "boolean") {
+          warnings.push({
+            time: Date.now(),
+            message: `outboundStatus[${index}] missing or invalid "alive" field (got ${typeof status.alive})`,
+            raw: status,
+          });
+          console.warn(
+            `[LiveFlow] outboundStatus[${index}] invalid alive:`,
+            status.alive
+          );
+        }
+
+        if (typeof status.delay !== "number") {
+          warnings.push({
+            time: Date.now(),
+            message: `outboundStatus[${index}] missing or invalid "delay" field (got ${typeof status.delay})`,
+            raw: status,
+          });
+          console.warn(
+            `[LiveFlow] outboundStatus[${index}] invalid delay:`,
+            status.delay
+          );
+        }
+
+        // Use a stable unique id based on the outbound tag
+        const sessionId = `obs-${outboundName}-${index}`;
+
+        return {
+          session_id: sessionId,
+          status: status.alive === true ? "active" : "error",
+          source: {
+            ip: outboundName,
+            port: "-",
+          },
+          destination: {
+            ip: status.outbound_tag || "unknown",
+            port: "-",
+            domain: status.outbound_tag || "unknown",
+          },
+          protocol: "proxy",
+          bytes_sent: 0,
+          bytes_recv: 0,
+          // Map delay (ms) so it is visible in the latency slot
+          speed_bps: typeof status.delay === "number" ? status.delay : 0,
+          last_activity: produceTime ? produceTime * 1000 : Date.now(),
+          start_time: produceTime ? produceTime * 1000 : Date.now(),
+        };
+      })
+      .filter(Boolean); // Remove any null entries from failed mappings
+
+    store.commit("SET_LIVE_FLOWS", flows);
+    store.commit("SET_LIVE_FLOW_WARNINGS", warnings);
+
+    if (warnings.length > 0) {
+      console.warn(
+        `[LiveFlow] Observatory processing completed with ${warnings.length} warning(s)`,
+        warnings
+      );
+    }
   }
 
   /**

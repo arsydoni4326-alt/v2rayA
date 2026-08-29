@@ -10,6 +10,7 @@ export default new Vuex.Store({
     connectedServer: {},
     liveFlows: [],
     liveFlowConnected: false,
+    liveFlowWarnings: [],
   },
   mutations: {
     NAV(state, val) {
@@ -26,6 +27,9 @@ export default new Vuex.Store({
     },
     SET_LIVE_FLOWS(state, flows) {
       state.liveFlows = flows;
+    },
+    SET_LIVE_FLOW_WARNINGS(state, warnings) {
+      state.liveFlowWarnings = warnings;
     },
     ADD_LIVE_FLOW(state, flow) {
       // Check if flow already exists
@@ -80,6 +84,7 @@ export default new Vuex.Store({
         liveFlowService.disconnect();
         commit("SET_LIVE_FLOW_CONNECTED", false);
         commit("SET_LIVE_FLOWS", []);
+        commit("SET_LIVE_FLOW_WARNINGS", []);
       });
     },
   },
