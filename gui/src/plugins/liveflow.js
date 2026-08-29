@@ -4,10 +4,37 @@ class LiveFlowService {
   constructor() {
     this.ws = null;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
+    this.maxReconnectAttempts = 10;
     this.reconnectDelay = 1000;
     this.isConnected = false;
     this.listeners = new Map();
+    this._token = null;
+    this._lastMessageTime = 0;
+    this._messageCount = 0;
+  }
+
+  /**
+   * Build the WebSocket URL, matching App.vue's pattern for custom backends.
+   */
+  _buildUrl(token) {
+    // apiRoot is a global defined by Vite: `${localStorage["backendAddress"]}/api`
+    let baseUrl = typeof apiRoot !== "undefined" ? apiRoot : "/api";
+
+    if (!baseUrl.trim() || baseUrl.startsWith("/")) {
+      baseUrl = location.protocol + "//" + location.host + baseUrl;
+    }
+
+    try {
+      const u = new URL(baseUrl);
+      const protocol = u.protocol === "https:" ? "wss:" : "ws:";
+      const basePath = u.pathname.replace(/\/api\/?$/, "");
+      return `${protocol}//${u.host}${basePath}/api/auth/live-flow?token=${encodeURIComponent(token)}`;
+    } catch (e) {
+      // Fallback to simple URL construction
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.host;
+      return `${protocol}//${host}/api/auth/live-flow?token=${encodeURIComponent(token)}`;
+    }
   }
 
   /**
@@ -16,17 +43,24 @@ class LiveFlowService {
    */
   connect(token) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log("[LiveFlow] Already connected, skipping");
       return;
     }
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    const url = `${protocol}//${host}/api/auth/live-flow?token=${token}`;
+    this._token = token;
+    const url = this._buildUrl(token);
+    console.log("[LiveFlow] Connecting to:", url.replace(/token=.*/, "token=***"));
 
-    this.ws = new WebSocket(url);
+    try {
+      this.ws = new WebSocket(url);
+    } catch (err) {
+      console.error("[LiveFlow] Failed to create WebSocket:", err);
+      this.emit("error", err);
+      return;
+    }
 
     this.ws.onopen = () => {
-      console.log("[LiveFlow] WebSocket connected");
+      console.log("[LiveFlow] WebSocket connected successfully");
       this.isConnected = true;
       this.reconnectAttempts = 0;
       this.emit("connected");
@@ -35,14 +69,16 @@ class LiveFlowService {
     this.ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        this._lastMessageTime = Date.now();
+        this._messageCount++;
         this.handleMessage(message);
       } catch (error) {
-        console.error("[LiveFlow] Failed to parse message:", error);
+        console.error("[LiveFlow] Failed to parse message:", error, event.data);
       }
     };
 
     this.ws.onclose = (event) => {
-      console.log("[LiveFlow] WebSocket closed:", event.code, event.reason);
+      console.log("[LiveFlow] WebSocket closed, code:", event.code, "reason:", event.reason);
       this.isConnected = false;
       this.emit("disconnected");
       this.attemptReconnect(token);
@@ -59,13 +95,17 @@ class LiveFlowService {
    */
   attemptReconnect(token) {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log("[LiveFlow] Max reconnect attempts reached");
+      console.warn("[LiveFlow] Max reconnect attempts reached");
       this.emit("reconnectFailed");
       return;
     }
 
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
-    console.log(`[LiveFlow] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`);
+    console.log(
+      `[LiveFlow] Reconnecting in ${delay}ms (attempt ${
+        this.reconnectAttempts + 1
+      }/${this.maxReconnectAttempts})`
+    );
 
     setTimeout(() => {
       this.reconnectAttempts++;
@@ -77,9 +117,10 @@ class LiveFlowService {
    * Handle incoming WebSocket messages
    */
   handleMessage(message) {
-    // Backend sends "body", not "data" — support both for compatibility
     const { type, body, data } = message;
     const payload = body || data;
+
+    console.log("[LiveFlow] Received message type:", type, "payload:", payload);
 
     switch (type) {
       case "flow_start":
@@ -106,7 +147,7 @@ class LiveFlowService {
         this.emit("flowError", payload);
         break;
       default:
-        console.log("[LiveFlow] Unknown message type:", type);
+        console.warn("[LiveFlow] Unknown message type:", type, message);
     }
   }
 
@@ -225,7 +266,6 @@ class LiveFlowService {
           );
         }
 
-        // Use a stable unique id based on the outbound tag
         const sessionId = `obs-${outboundName}-${index}`;
 
         return {
@@ -243,13 +283,16 @@ class LiveFlowService {
           protocol: "proxy",
           bytes_sent: 0,
           bytes_recv: 0,
-          // Map delay (ms) so it is visible in the latency slot
           speed_bps: typeof status.delay === "number" ? status.delay : 0,
           last_activity: produceTime ? produceTime * 1000 : Date.now(),
           start_time: produceTime ? produceTime * 1000 : Date.now(),
         };
       })
-      .filter(Boolean); // Remove any null entries from failed mappings
+      .filter(Boolean);
+
+    console.log(
+      `[LiveFlow] Observatory update: ${flows.length} flows committed, ${warnings.length} warnings`
+    );
 
     store.commit("SET_LIVE_FLOWS", flows);
     store.commit("SET_LIVE_FLOW_WARNINGS", warnings);
@@ -306,6 +349,7 @@ class LiveFlowService {
    * Disconnect from WebSocket
    */
   disconnect() {
+    console.log("[LiveFlow] Disconnecting...");
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -319,6 +363,18 @@ class LiveFlowService {
    */
   getConnectionStatus() {
     return this.isConnected;
+  }
+
+  /**
+   * Get debug info
+   */
+  getDebugInfo() {
+    return {
+      isConnected: this.isConnected,
+      reconnectAttempts: this.reconnectAttempts,
+      lastMessageTime: this._lastMessageTime,
+      messageCount: this._messageCount,
+    };
   }
 }
 

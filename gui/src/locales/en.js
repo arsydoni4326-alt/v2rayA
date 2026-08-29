@@ -490,4 +490,20 @@ export default {
   },
   pinnedPeerCertSha256: "Pinned Certificate SHA256",
   verifyPeerCertByName: "Verify Peer Cert By Name",
+  bulkAddByLatency: {
+    title: "Bulk Add Nodes by Latency",
+    button: "Bulk Add by Latency",
+    messages: [
+      "Add all nodes with latency below the threshold to a proxy group in one go. Run latency tests first.",
+    ],
+    maxLatency: "Max Latency (ms)",
+    maxLatencyPlaceholder: "e.g. 500",
+    targetGroup: "Target Proxy Group",
+    preview: "{count} node(s) will be added to {group}",
+    previewNoMatch: "No matching nodes (latency ≤ {threshold}ms)",
+    noLatencyData: "No latency data available. Please run latency tests first.",
+    confirm: "Bulk Add",
+    success: "Successfully added {count} node(s) to {group}",
+    alreadyInGroup: "{count} node(s) already in group, duplicates will be skipped",
+  },
 };

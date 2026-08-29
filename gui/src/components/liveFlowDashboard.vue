@@ -8,6 +8,14 @@
       </div>
     </div>
 
+    <!-- Debug Info -->
+    <div class="live-flow-debug" v-if="debugInfo">
+      <span class="debug-item">Flows: {{ safeFlows.length }}</span>
+      <span class="debug-item">Messages: {{ debugInfo.messageCount }}</span>
+      <span class="debug-item">Reconnects: {{ debugInfo.reconnectAttempts }}</span>
+      <span class="debug-item">Last msg: {{ debugInfo.lastMessageTime ? formatTime(debugInfo.lastMessageTime) : 'N/A' }}</span>
+    </div>
+
     <!-- Warnings Banner -->
     <div v-if="liveFlowWarnings.length > 0" class="live-flow-warnings">
       <div class="warnings-header">
@@ -28,16 +36,6 @@
 
     <div class="live-flow-controls">
       <div class="filter-group">
-        <label>Protocol Filter:</label>
-        <select v-model="filters.protocol" class="filter-select">
-          <option value="">All</option>
-          <option value="tcp">TCP</option>
-          <option value="udp">UDP</option>
-          <option value="proxy">Proxy</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
         <label>Status Filter:</label>
         <select v-model="filters.status" class="filter-select">
           <option value="">All</option>
@@ -53,17 +51,21 @@
     </div>
 
     <div class="live-flow-canvas" ref="canvas">
-      <div v-if="filteredFlows.length === 0" class="no-flows">
-        No active flows. Connect to a proxy server to see live traffic.
+      <div v-if="connectionStatus === 'disconnected'" class="no-flows"><!--
+    --><span class="no-flows-msg">Disconnected. Attempting to reconnect...</span><!--
+  --></div>
+
+      <div v-else-if="filteredFlows.length === 0" class="no-flows">
+        Waiting for live traffic data...
       </div>
 
       <div
-        v-for="flow in safeFlows"
+        v-for="flow in filteredFlows"
         :key="flow.session_id"
         :class="['flow-card', flow.status]"
       >
         <div class="flow-header">
-          <span class="flow-id">{{ flow.session_id ? flow.session_id.substring(0, 8) : '--------' }}</span>
+          <span class="flow-id">{{ flow.session_id ? flow.session_id.substring(0, 12) : '--------' }}</span>
           <span :class="['flow-status', flow.status]">{{ flow.status || 'unknown' }}</span>
         </div>
 
@@ -81,12 +83,16 @@
           <div class="endpoint destination">
             <div class="endpoint-label">Destination</div>
             <div class="endpoint-value">
-              {{ flow.destination ? (flow.destination.domain || flow.destination.ip || 'N/A') : 'N/A' }}{{ flow.destination && flow.destination.port ? ':' + flow.destination.port : '' }}
+              {{ flow.destination ? (flow.destination.domain || flow.destination.ip || 'N/A') : 'N/A' }}<template v-if="flow.destination && flow.destination.port && flow.destination.port !== '-'">:{{ flow.destination.port }}</template>
             </div>
           </div>
         </div>
 
         <div class="flow-stats">
+          <div class="stat">
+            <span class="stat-label">Latency:</span>
+            <span class="stat-value">{{ flow.speed_bps ? flow.speed_bps + ' ms' : 'N/A' }}</span>
+          </div>
           <div class="stat">
             <span class="stat-label">Sent:</span>
             <span class="stat-value">{{ formatBytes(flow.bytes_sent || 0) }}</span>
@@ -94,10 +100,6 @@
           <div class="stat">
             <span class="stat-label">Recv:</span>
             <span class="stat-value">{{ formatBytes(flow.bytes_recv || 0) }}</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Latency:</span>
-            <span class="stat-value">{{ flow.speed_bps ? flow.speed_bps + ' ms' : 'N/A' }}</span>
           </div>
         </div>
 
@@ -126,6 +128,7 @@
 
 <script>
 import { mapState } from "vuex";
+import liveFlowService from "../plugins/liveflow";
 
 export default {
   name: "LiveFlowDashboard",
@@ -136,6 +139,8 @@ export default {
         status: "",
       },
       expandedWarnings: {},
+      debugInfo: null,
+      _debugTimer: null,
     };
   },
   computed: {
@@ -157,31 +162,50 @@ export default {
     },
     filteredFlows() {
       let flows = this.safeFlows;
-      if (this.filters.protocol) {
-        flows = flows.filter(
-          (flow) => flow.protocol.toLowerCase() === this.filters.protocol
-        );
-      }
       if (this.filters.status) {
         flows = flows.filter((flow) => flow.status === this.filters.status);
       }
       return flows;
     },
   },
+  mounted() {
+    // Auto-connect to live flow WebSocket
+    const token = localStorage["token"];
+    if (token) {
+      console.log("[LiveFlow] Dashboard mounted, connecting...");
+      this.$store.dispatch("connectLiveFlow", token);
+    } else {
+      console.warn("[LiveFlow] No auth token found, cannot connect");
+    }
+
+    // Start debug info refresh
+    this._debugTimer = setInterval(() => {
+      this-refreshDebugInfo();
+    }, 3000);
+  },
+  beforeDestroy() {
+    // Disconnect when dashboard is destroyed
+    console.log("[LiveFlow] Dashboard destroyed, disconnecting...");
+    this.$store.dispatch("disconnectLiveFlow");
+    if (this._debugTimer) {
+      clearInterval(this._debugTimer);
+      this._debugTimer = null;
+    }
+  },
   methods: {
+    refreshDebugInfo() {
+      try {
+        this.debugInfo = liveFlowService.getDebugInfo();
+      } catch (e) {
+        // Ignore errors during debug refresh
+      }
+    },
     formatBytes(bytes) {
       if (!bytes || bytes === 0) return "0 B";
       const k = 1024;
       const sizes = ["B", "KB", "MB", "GB"];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-    },
-    formatSpeed(bps) {
-      if (!bps || bps === 0) return "0 bps";
-      const k = 1000;
-      const sizes = ["bps", "Kbps", "Mbps", "Gbps"];
-      const i = Math.floor(Math.log(bps) / Math.log(k));
-      return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     },
     formatTime(timestamp) {
       if (!timestamp) return "N/A";
@@ -204,7 +228,9 @@ export default {
 };
 </script>
 
-<style scoped>
+<!-- Use non-scoped style to support body.theme-dark -->
+<style>
+/* ===== Light Theme (default) ===== */
 .live-flow-dashboard {
   padding: 20px;
   background-color: #f5f5f5;
@@ -235,23 +261,39 @@ export default {
 }
 .status-indicator.connected {
   background-color: #4caf50;
-  animation: pulse 2s infinite;
+  animation: lfd-pulse 2s infinite;
 }
 .status-indicator.disconnected {
   background-color: #f44336;
 }
-@keyframes pulse {
+@keyframes lfd-pulse {
   0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
   70% { box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
   100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
 }
+/* Debug info */
+.live-flow-debug {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background-color: #e8eaf6;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #3949ab;
+}
+.debug-item {
+  font-family: monospace;
+}
+/* Warnings */
 .live-flow-warnings {
   margin-bottom: 20px;
   padding: 12px 16px;
   background-color: #fff3e0;
   border: 1px solid #ffb74d;
   border-radius: 6px;
-  animation: fadeIn 0.3s ease;
+  animation: lfd-fadeIn 0.3s ease;
 }
 .warnings-header {
   display: flex;
@@ -303,6 +345,7 @@ export default {
   white-space: pre-wrap;
   word-break: break-all;
 }
+/* Controls */
 .live-flow-controls {
   display: flex;
   gap: 15px;
@@ -324,6 +367,7 @@ export default {
   border-radius: 4px;
   font-size: 14px;
   background-color: white;
+  color: #333;
 }
 .clear-button {
   padding: 6px 16px;
@@ -336,8 +380,11 @@ export default {
   margin-left: auto;
 }
 .clear-button:hover { background-color: #d32f2f; }
+/* Canvas */
 .live-flow-canvas { min-height: 200px; }
 .no-flows { text-align: center; padding: 40px; color: #999; font-size: 16px; }
+.no-flows-msg { color: #f44336; }
+/* Flow cards */
 .flow-card {
   padding: 15px;
   background-color: white;
@@ -345,9 +392,9 @@ export default {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   margin-bottom: 15px;
   transition: all 0.3s ease;
-  animation: fadeIn 0.3s ease;
+  animation: lfd-fadeIn 0.3s ease;
 }
-@keyframes fadeIn {
+@keyframes lfd-fadeIn {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
@@ -380,8 +427,8 @@ export default {
   align-items: center;
   margin: 0 15px;
 }
-.arrow-icon { font-size: 20px; color: #666; animation: flow 1.5s infinite; }
-@keyframes flow {
+.arrow-icon { font-size: 20px; color: #666; animation: lfd-flow 1.5s infinite; }
+@keyframes lfd-flow {
   0% { opacity: 0.5; transform: translateX(-2px); }
   50% { opacity: 1; transform: translateX(2px); }
   100% { opacity: 0.5; transform: translateX(-2px); }
@@ -399,6 +446,7 @@ export default {
 .stat-label { color: #666; font-size: 12px; }
 .stat-value { font-weight: 500; font-size: 12px; color: #333; }
 .flow-meta { font-size: 12px; color: #999; }
+/* Legend */
 .live-flow-legend {
   display: flex;
   gap: 20px;
@@ -419,4 +467,110 @@ export default {
 .legend-color.active { background-color: #4caf50; }
 .legend-color.idle { background-color: #ff9800; }
 .legend-color.error { background-color: #f44336; }
+
+/* ===== Dark Theme ===== */
+body.theme-dark .live-flow-dashboard {
+  background-color: #1c1b1f;
+}
+body.theme-dark .live-flow-header h2 {
+  color: #e6e1e5;
+}
+body.theme-dark .connection-status {
+  color: #cac4d0;
+}
+body.theme-dark .live-flow-debug {
+  background-color: #2d2a3e;
+  color: #b39ddb;
+}
+body.theme-dark .live-flow-warnings {
+  background-color: #3e2a00;
+  border-color: #ff8f00;
+}
+body.theme-dark .warnings-header {
+  color: #ffab40;
+}
+body.theme-dark .warnings-dismiss {
+  border-color: #ffab40;
+  color: #ffab40;
+}
+body.theme-dark .warnings-dismiss:hover {
+  background-color: #ffab40;
+  color: #000;
+}
+body.theme-dark .warning-item {
+  color: #ffcc80;
+  border-bottom-color: rgba(255, 171, 64, 0.1);
+}
+body.theme-dark .warning-raw {
+  color: #ffab40;
+  border-color: #ffab40;
+}
+body.theme-dark .warning-raw:hover {
+  background-color: #ffab40;
+  color: #000;
+}
+body.theme-dark .warning-raw-data {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+body.theme-dark .live-flow-controls {
+  background-color: #211f26;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+body.theme-dark .filter-group label {
+  color: #cac4d0;
+}
+body.theme-dark .filter-select {
+  background-color: #2d2a3e;
+  color: #e6e1e5;
+  border-color: #49454f;
+}
+body.theme-dark .clear-button {
+  background-color: #c62828;
+}
+body.theme-dark .clear-button:hover {
+  background-color: #e53935;
+}
+body.theme-dark .live-flow-canvas .no-flows {
+  color: #938f99;
+}
+body.theme-dark .no-flows-msg {
+  color: #ef5350;
+}
+body.theme-dark .flow-card {
+  background-color: #211f26;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+body.theme-dark .flow-id { color: #cac4d0; }
+body.theme-dark .flow-status.active { background-color: #1b3a20; color: #81c784; }
+body.theme-dark .flow-status.idle { background-color: #3e2a00; color: #ffb74d; }
+body.theme-dark .flow-status.error { background-color: #3e1216; color: #ef5350; }
+body.theme-dark .endpoint-label { color: #938f99; }
+body.theme-dark .endpoint-value { color: #e6e1e5; }
+body.theme-dark .arrow-icon { color: #cac4d0; }
+body.theme-dark .protocol-badge {
+  background-color: #1a2744;
+  color: #64b5f6;
+}
+body.theme-dark .stat-label { color: #938f99; }
+body.theme-dark .stat-value { color: #e6e1e5; }
+body.theme-dark .flow-meta { color: #938f99; }
+body.theme-dark .live-flow-legend {
+  background-color: #211f26;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+body.theme-dark .legend-item {
+  color: #cac4d0;
+}
+body.theme-dark .flow-card.active {
+  border-left-color: #4caf50;
+}
+body.theme-dark .flow-card.idle {
+  border-left-color: #ff9800;
+}
+body.theme-dark .flow-card.error {
+  border-left-color: #f44336;
+}
+body.theme-dark .legend-color.active { background-color: #4caf50; }
+body.theme-dark .legend-color.idle { background-color: #ff9800; }
+body.theme-dark .legend-color.error { background-color: #f44336; }
 </style>

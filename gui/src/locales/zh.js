@@ -493,4 +493,20 @@ export default {
   },
   pinnedPeerCertSha256: "固定证书 SHA256",
   verifyPeerCertByName: "证书验证域名",
+  bulkAddByLatency: {
+    title: "按时延批量添加节点",
+    button: "按时延批量添加",
+    messages: [
+      "将所有时延低于阈值的节点批量添加到指定的代理分组中。请先对节点进行延迟测试。",
+    ],
+    maxLatency: "最大时延（毫秒）",
+    maxLatencyPlaceholder: "例如 500",
+    targetGroup: "目标代理分组",
+    preview: "将添加 {count} 个节点到 {group}",
+    previewNoMatch: "没有符合条件的节点（时延 ≤ {threshold}ms）",
+    noLatencyData: "没有可用的时延数据，请先运行延迟测试",
+    confirm: "批量添加",
+    success: "成功添加 {count} 个节点到 {group}",
+    alreadyInGroup: "已有 {count} 个节点在分组中，将跳过重复节点",
+  },
 };

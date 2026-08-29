@@ -162,6 +162,14 @@
               {{ $t("operations.downloadTxt") }}
             </b-dropdown-item>
           </b-dropdown>
+          <b-button
+            class="field mobile-small"
+            type="is-success"
+            @click="handleClickBulkAddByLatency"
+          >
+            <i class="iconfont icon-daoruzupu-xianxing" />
+            <span>{{ $t("bulkAddByLatency.button") }}</span>
+          </b-button>
         </div>
         <div class="right">
           <b-button
@@ -772,6 +780,7 @@ import ModalServer from "@/components/modalServer";
 import ModalSubscription from "@/components/modalSubcription";
 import ModalSharing from "@/components/modalSharing";
 import ModalPickProxyGroup from "@/components/modalPickProxyGroup";
+import modalBulkAddByLatency from "@/components/modalBulkAddByLatency";
 import LiveFlowDashboard from "@/components/liveFlowDashboard";
 import { waitingConnected } from "@/assets/js/networkInspect";
 import axios from "@/plugins/axios";
@@ -1752,6 +1761,24 @@ export default {
         .finally(() => {
           clearTimeout(timerTip);
         });
+    },
+    handleClickBulkAddByLatency() {
+      this.$buefy.modal.open({
+        parent: this,
+        component: modalBulkAddByLatency,
+        hasModalCard: true,
+        canCancel: true,
+        events: {
+          done: () => {
+            this.$axios({ url: apiRoot + "/touch" }).then((res) => {
+              if (res.data && res.data.code === "SUCCESS") {
+                this.refreshTableData(res.data.data.touch, res.data.data.running, res.data.data.networkPaused);
+                this.updateConnectView();
+              }
+            });
+          },
+        },
+      });
     },
     // eslint-disable-next-line no-unused-vars
     handleTabsChange(index) {

@@ -32,7 +32,6 @@ export default new Vuex.Store({
       state.liveFlowWarnings = warnings;
     },
     ADD_LIVE_FLOW(state, flow) {
-      // Check if flow already exists
       const existingIndex = state.liveFlows.findIndex(
         (f) => f.session_id === flow.session_id
       );
@@ -45,7 +44,6 @@ export default new Vuex.Store({
         (f) => f.session_id === update.session_id
       );
       if (index !== -1) {
-        // Update the flow with new data
         Vue.set(state.liveFlows, index, {
           ...state.liveFlows[index],
           bytes_sent: update.bytes_sent,
