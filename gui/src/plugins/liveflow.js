@@ -28,12 +28,12 @@ class LiveFlowService {
       const u = new URL(baseUrl);
       const protocol = u.protocol === "https:" ? "wss:" : "ws:";
       const basePath = u.pathname.replace(/\/api\/?$/, "");
-      return `${protocol}//${u.host}${basePath}/api/auth/live-flow?token=${encodeURIComponent(token)}`;
+      return `${protocol}//${u.host}${basePath}/api/live-flow?Authorization=${encodeURIComponent(token)}`;
     } catch (e) {
       // Fallback to simple URL construction
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const host = window.location.host;
-      return `${protocol}//${host}/api/auth/live-flow?token=${encodeURIComponent(token)}`;
+      return `${protocol}//${host}/api/live-flow?Authorization=${encodeURIComponent(token)}`;
     }
   }
 
@@ -49,7 +49,10 @@ class LiveFlowService {
 
     this._token = token;
     const url = this._buildUrl(token);
-    console.log("[LiveFlow] Connecting to:", url.replace(/token=.*/, "token=***"));
+    console.log(
+      "[LiveFlow] Connecting to:",
+      url.replace(/([?&](?:Authorization|token)=)[^&]*/, "$1***")
+    );
 
     try {
       this.ws = new WebSocket(url);

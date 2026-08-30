@@ -50,7 +50,7 @@ class LiveFlowPerformanceTest:
         pass
         
     def create_connection(self):
-        url = f"ws://{self.host}:{self.port}/api/auth/live-flow?token={self.token}"
+        url = f"ws://{self.host}:{self.port}/api/live-flow?Authorization={self.token}"
         ws = websocket.WebSocketApp(
             url,
             on_message=self.on_message,

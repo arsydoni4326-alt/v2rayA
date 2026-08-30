@@ -71,6 +71,8 @@ func (r *RateLimiter) IsAllowed(clientID string) bool {
 
 // WsLiveFlow handles WebSocket connection for live flow visualization
 func WsLiveFlow(ctx *gin.Context) {
+	logInfo("[LiveFlow] WebSocket connection request from %s", ctx.ClientIP())
+
 	// Get client identifier (IP + token)
 	clientID := ctx.ClientIP()
 	token := ctx.Query("token")
@@ -84,15 +86,36 @@ func WsLiveFlow(ctx *gin.Context) {
 		}
 	}
 
+	logInfo("[LiveFlow] Token source: %s, token present: %v",
+		func() string {
+			if ctx.Query("token") != "" {
+				return "query:token"
+			}
+			if ctx.Query("Authorization") != "" {
+				return "query:Authorization"
+			}
+			if ctx.GetHeader("Authorization") != "" {
+				return "header:Authorization"
+			}
+			return "none"
+		}(), token != "")
+
 	// Validate token
-	if token == "" || !jwt.ValidateToken(token) {
-		common.Response(ctx, common.UNAUTHORIZED, "unauthorized")
+	if token == "" {
+		logInfo("[LiveFlow] Rejected: no token provided")
+		common.Response(ctx, common.UNAUTHORIZED, "unauthorized: no token")
+		return
+	}
+	if !jwt.ValidateToken(token) {
+		logInfo("[LiveFlow] Rejected: invalid token")
+		common.Response(ctx, common.UNAUTHORIZED, "unauthorized: invalid token")
 		return
 	}
 
 	// Rate limiting
 	clientID += ":" + token[:8] // Use first 8 chars of token
 	if !rateLimiter.IsAllowed(clientID) {
+		logInfo("[LiveFlow] Rejected: rate limit exceeded for %s", clientID)
 		ctx.JSON(http.StatusTooManyRequests, gin.H{
 			"code":    "FAIL",
 			"message": "rate limit exceeded",
@@ -101,12 +124,15 @@ func WsLiveFlow(ctx *gin.Context) {
 		return
 	}
 
+	logInfo("[LiveFlow] Upgrading to WebSocket...")
 	conn, err := liveFlowUpgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
+		logInfo("[LiveFlow] WebSocket upgrade failed: %v", err)
 		logError(err)
 		return
 	}
 
+	logInfo("[LiveFlow] WebSocket connected, starting handler")
 	h := service.NewLiveFlowHandler(conn)
 	h.Start()
 	defer h.Stop()
@@ -116,4 +142,5 @@ func WsLiveFlow(ctx *gin.Context) {
 
 	// Keep connection alive until client disconnects
 	<-h.Done
+	logInfo("[LiveFlow] WebSocket disconnected for %s", ctx.ClientIP())
 }

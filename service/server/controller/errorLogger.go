@@ -10,3 +10,7 @@ func logError(err interface{}) error {
 	log.Error("%v", e)
 	return e
 }
+
+func logInfo(format string, args ...interface{}) {
+	log.Info(format, args...)
+}

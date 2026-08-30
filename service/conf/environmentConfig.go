@@ -55,7 +55,7 @@ func initFunc() {
 		EnvPrefix:         "V2RAYA_",
 	})
 	if err != nil {
-		if err.Error() != "unexpected word while parsing flags: '-test.v'" {
+		if !isGoTestFlagError(err) {
 			log2.Fatal(err)
 		}
 	}
@@ -123,6 +123,13 @@ func initFunc() {
 	if params.CoreStartupTimeout <= 0 {
 		log.Fatal("invalid CoreStartupTimeout: %d seconds. It must be a positive integer greater than 0.", params.CoreStartupTimeout)
 	}
+}
+
+// isGoTestFlagError reports whether gonfig rejected a flag reserved for the
+// Go test binary. Go releases add different -test.* flags over time, so the
+// application must not special-case a single test runner flag.
+func isGoTestFlagError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "unexpected word while parsing flags: '-test.")
 }
 
 var once sync.Once

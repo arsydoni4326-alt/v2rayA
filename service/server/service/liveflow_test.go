@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -53,5 +54,53 @@ func TestGenerateSessionID(t *testing.T) {
 
 	if id1 == id2 {
 		t.Error("Expected unique session IDs")
+	}
+}
+
+func TestLiveFlowMessageJSONEnvelope(t *testing.T) {
+	encoded, err := json.Marshal(LiveFlowMessage{
+		Type: "batch_state",
+		Data: BatchStateData{TotalActive: 2},
+	})
+	if err != nil {
+		t.Fatalf("marshal live flow message: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal live flow message: %v", err)
+	}
+	if decoded["type"] != "batch_state" {
+		t.Errorf("expected type batch_state, got %#v", decoded["type"])
+	}
+	if _, ok := decoded["data"]; !ok {
+		t.Error("expected data field in live flow message")
+	}
+}
+
+func TestObservatoryMessageJSONEnvelope(t *testing.T) {
+	encoded, err := json.Marshal(ObservatoryMessage{
+		ProduceTime: 1788075070,
+		Type:        "observatory",
+		Body: map[string]interface{}{
+			"outboundName": "proxy",
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal observatory message: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal observatory message: %v", err)
+	}
+	if decoded["type"] != "observatory" {
+		t.Errorf("expected type observatory, got %#v", decoded["type"])
+	}
+	if _, ok := decoded["body"]; !ok {
+		t.Error("expected body field in observatory message")
+	}
+	if _, ok := decoded["data"]; ok {
+		t.Error("observatory message must not have a data wrapper")
 	}
 }

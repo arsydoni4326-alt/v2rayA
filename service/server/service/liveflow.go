@@ -54,6 +54,14 @@ type LiveFlowMessage struct {
 	Data interface{} `json:"data"`
 }
 
+// ObservatoryMessage is the API feed envelope consumed by the dashboard.
+// It deliberately matches the established /api/message WebSocket protocol.
+type ObservatoryMessage struct {
+	ProduceTime int64       `json:"produce_time"`
+	Type        string      `json:"type"`
+	Body        interface{} `json:"body"`
+}
+
 // FlowStartData represents flow start message data
 type FlowStartData struct {
 	SessionID   string            `json:"session_id"`
@@ -98,10 +106,13 @@ type LiveFlowHandler struct {
 	conn     *websocket.Conn
 	sessions map[string]*LiveFlowSession
 	mu       sync.RWMutex
-	send     chan LiveFlowMessage
+	send     chan interface{}
 	Done     chan struct{}
+	// Feed subscription
+	observatoryBox *v2ray.Box
+	feedCancel     func()
 	// Throttling
-	lastUpdate time.Time
+	lastUpdate     time.Time
 	updateInterval time.Duration
 }
 
@@ -110,18 +121,17 @@ func NewLiveFlowHandler(conn *websocket.Conn) *LiveFlowHandler {
 	h := &LiveFlowHandler{
 		conn:           conn,
 		sessions:       make(map[string]*LiveFlowSession),
-		send:           make(chan LiveFlowMessage, 256),
+		send:           make(chan interface{}, 256),
 		Done:           make(chan struct{}),
 		lastUpdate:     time.Now(),
 		updateInterval: 100 * time.Millisecond, // 10 updates per second max
 	}
-	// Subscribe to live flow events from the kernel
-	go h.subscribeToLiveFlowEvents()
 	return h
 }
 
-// Start begins the live flow handler
+// Start begins the live flow handler — subscribes to observatory feed and starts pumps
 func (h *LiveFlowHandler) Start() {
+	h.subscribeToObservatoryFeed()
 	go h.writePump()
 	go h.readPump()
 }
@@ -271,19 +281,36 @@ func GenerateSessionID() string {
 	return uuid.New().String()
 }
 
-// subscribeToLiveFlowEvents subscribes to live flow events from the kernel
-func (h *LiveFlowHandler) subscribeToLiveFlowEvents() {
-	// Get the LiveFlowProducer singleton
-	producer := v2ray.GetLiveFlowProducer()
-	if producer == nil {
-		log.Error("LiveFlow producer not available")
+// subscribeToObservatoryFeed subscribes to the observatory product on ApiFeed
+// and forwards messages to the WebSocket send channel.
+func (h *LiveFlowHandler) subscribeToObservatoryFeed() {
+	box := v2ray.ApiFeed.SubscribeMessage("observatory")
+	if box == nil {
+		log.Error("LiveFlow: failed to subscribe to observatory feed (product not registered)")
 		return
 	}
+	h.observatoryBox = box
+	h.feedCancel = box.Cancel
 
-	// Start the producer if not already started
-	producer.Start()
+	log.Info("LiveFlow: subscribed to observatory feed")
 
-	log.Info("LiveFlow handler subscribed to live flow events")
+	go func() {
+		for msg := range box.Messages {
+			// Forward the observatory message directly to the WebSocket.
+			// Format matches /api/message: { produce_time, type, body }
+			select {
+			case h.send <- ObservatoryMessage{
+				ProduceTime: msg.ProduceTime,
+				Type:        msg.Product,
+				Body:        msg.Body,
+			}:
+			case <-h.Done:
+				return
+			default:
+				// Channel full, drop message to avoid blocking
+			}
+		}
+	}()
 }
 func (h *LiveFlowHandler) EndSession(sessionID string, reason string) {
 	h.mu.Lock()
@@ -314,6 +341,7 @@ func (h *LiveFlowHandler) EndSession(sessionID string, reason string) {
 	// Remove session
 	delete(h.sessions, sessionID)
 }
+
 // Stop stops the live flow handler
 func (h *LiveFlowHandler) Stop() {
 	select {
@@ -321,6 +349,10 @@ func (h *LiveFlowHandler) Stop() {
 		// Already closed
 	default:
 		close(h.Done)
+	}
+	// Cancel feed subscription if active
+	if h.feedCancel != nil {
+		h.feedCancel()
 	}
 	h.conn.Close()
 }
