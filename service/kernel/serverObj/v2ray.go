@@ -808,6 +808,49 @@ func (v *V2Ray) GetPort() int {
 	return p
 }
 
+// isPrivateAddress checks if the given address is a private/reserved IP or a
+// local domain, matching the xray-core "requiresTransportSecurity" logic.
+func isPrivateAddress(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified()
+	}
+	lower := strings.ToLower(host)
+	return lower == "localhost" ||
+		strings.HasSuffix(lower, ".local") ||
+		strings.HasSuffix(lower, ".localhost")
+}
+
+// DisableReason returns a non-empty string when this V2Ray server
+// configuration is known to be incompatible with the bundled xray-core,
+// explaining why the server should be disabled in the UI.
+func (v *V2Ray) DisableReason() string {
+	// Reality with empty pbk — broken config, will always fail
+	if v.TLS == "reality" && v.PublicKey == "" {
+		return "Reality requires a public key (pbk)"
+	}
+	// Reality with ML-DSA / post-quantum ("blake") — ML-DSA public keys
+	// are ~1952 bytes (base64 ≈2604 chars) vs X25519's 32 bytes (≈44 chars).
+	if v.TLS == "reality" && len(v.PublicKey) > 100 {
+		return "Reality with ML-DSA (post-quantum) is not supported"
+	}
+	// XHTTP transport — not supported by the bundled core
+	if v.Net == "xhttp" {
+		return "XHTTP transport is not supported by this core"
+	}
+	// VLESS without TLS or other encryption is prohibited for public addresses
+	if v.Protocol == "vless" && (v.TLS == "" || v.TLS == "none") {
+		if !isPrivateAddress(v.Add) {
+			return "VLESS without TLS is prohibited for public addresses"
+		}
+	}
+	return ""
+}
+
 func (v *V2Ray) GetName() string {
 	return v.Ps
 }

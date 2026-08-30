@@ -337,6 +337,7 @@
               :checked-rows.sync="checkedRows"
               checkable
               default-sort="id"
+              :row-class="getRowClass"
             >
               <b-table-column
                 v-slot="props"
@@ -353,7 +354,16 @@
                 :label="$t('server.name')"
                 sortable
               >
-                {{ props.row.name }}
+                <span>{{ props.row.name }}</span>
+                <b-tooltip
+                  v-if="props.row.disableReason"
+                  :label="props.row.disableReason"
+                  type="is-warning"
+                  position="is-right"
+                  size="is-small"
+                >
+                  <b-icon icon="alert" size="is-small" type="is-warning" class="disable-reason-icon" />
+                </b-tooltip>
               </b-table-column>
               <b-table-column
                 v-slot="props"
@@ -490,6 +500,7 @@
               :checked-rows.sync="checkedRows"
               checkable
               default-sort="id"
+              :row-class="getRowClass"
             >
               <b-table-column
                 v-slot="props"
@@ -506,7 +517,16 @@
                 :label="$t('server.name')"
                 sortable
               >
-                {{ props.row.name }}
+                <span>{{ props.row.name }}</span>
+                <b-tooltip
+                  v-if="props.row.disableReason"
+                  :label="props.row.disableReason"
+                  type="is-warning"
+                  position="is-right"
+                  size="is-small"
+                >
+                  <b-icon icon="alert" size="is-small" type="is-warning" class="disable-reason-icon" />
+                </b-tooltip>
               </b-table-column>
               <b-table-column
                 v-slot="props"
@@ -854,6 +874,7 @@ export default {
       clipboard: null,
       coreVersionValid: true,
       coreVersionErr: "",
+      _suppressCheckedRowsWatcher: false,
     };
   },
   computed: {
@@ -867,6 +888,19 @@ export default {
     },
     outbound() {
       this.updateConnectView();
+    },
+    checkedRows: {
+      handler(newVal) {
+        if (this._suppressCheckedRowsWatcher) return;
+        const filtered = newVal.filter((row) => !row.disableReason);
+        if (filtered.length < newVal.length) {
+          this._suppressCheckedRowsWatcher = true;
+          this.checkedRows = filtered;
+          this.$nextTick(() => {
+            this._suppressCheckedRowsWatcher = false;
+          });
+        }
+      },
     },
     tableData(x) {
       for (const sub of x.subscriptions) {
@@ -981,6 +1015,9 @@ export default {
     }
   },
   methods: {
+    getRowClass(row) {
+      return row.disableReason ? "is-disabled-row" : "";
+    },
     getRunningLabel(running, networkPaused = false) {
       if (networkPaused) {
         return this.$t("common.waitingNetwork");
@@ -2042,6 +2079,15 @@ td {
 
 .ping-latency {
   font-size: 0.8em;
+}
+
+.is-disabled-row {
+  opacity: 0.5;
+}
+
+.disable-reason-icon {
+  margin-left: 4px;
+  vertical-align: middle;
 }
 </style>
 

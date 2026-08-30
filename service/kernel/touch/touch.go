@@ -20,12 +20,13 @@ type Touch struct {
 	ConnectedServers []*configure.Which `json:"connectedServer"` //冗余一个信息，方便查找
 }
 type Server struct {
-	ID          int                 `json:"id"`
-	TYPE        configure.TouchType `json:"_type"`
-	Name        string              `json:"name"`
-	Address     string              `json:"address"`
-	Net         string              `json:"net"`
-	PingLatency string              `json:"pingLatency"`
+	ID           int                 `json:"id"`
+	TYPE         configure.TouchType `json:"_type"`
+	Name         string              `json:"name"`
+	Address      string              `json:"address"`
+	Net          string              `json:"net"`
+	PingLatency  string              `json:"pingLatency"`
+	DisableReason string             `json:"disableReason,omitempty"`
 }
 type Subscription struct {
 	Remarks string              `json:"remarks,omitempty"`
@@ -43,7 +44,14 @@ func NewUpdateStatus() SubscriptionStatus {
 	return SubscriptionStatus(time.Now().Local().Format("2006-1-2 15:04:05"))
 }
 
-/* Mapping []TouchServerRaw to []Server */
+// Mapping []TouchServerRaw to []Server
+
+// disablable is an optional interface that ServerObj implementations can
+// satisfy to indicate that the server should be disabled in the UI.
+type disablable interface {
+	DisableReason() string
+}
+
 func serverRawsToServers(rss []configure.ServerRaw) (ts []Server) {
 	ts = make([]Server, len(rss))
 	for i, v := range rss {
@@ -53,13 +61,17 @@ func serverRawsToServers(rss []configure.ServerRaw) (ts []Server) {
 		} else {
 			address = net.JoinHostPort(v.ServerObj.GetHostname(), strconv.Itoa(v.ServerObj.GetPort()))
 		}
-		ts[i] = Server{
+		s := Server{
 			ID:          i + 1,
 			Name:        v.ServerObj.GetName(),
 			Address:     address,
 			Net:         v.ServerObj.ProtoToShow(),
 			PingLatency: v.Latency,
 		}
+		if d, ok := v.ServerObj.(disablable); ok {
+			s.DisableReason = d.DisableReason()
+		}
+		ts[i] = s
 	}
 	return
 }
