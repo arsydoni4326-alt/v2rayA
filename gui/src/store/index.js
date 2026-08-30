@@ -26,12 +26,15 @@ export default new Vuex.Store({
       state.liveFlowConnected = val;
     },
     SET_LIVE_FLOWS(state, flows) {
-      state.liveFlows = flows;
+      state.liveFlows = Array.isArray(flows) ? flows : [];
     },
     SET_LIVE_FLOW_WARNINGS(state, warnings) {
       state.liveFlowWarnings = warnings;
     },
     ADD_LIVE_FLOW(state, flow) {
+      if (!flow || typeof flow.session_id !== "string") {
+        return;
+      }
       const existingIndex = state.liveFlows.findIndex(
         (f) => f.session_id === flow.session_id
       );
@@ -40,6 +43,9 @@ export default new Vuex.Store({
       }
     },
     UPDATE_LIVE_FLOW(state, update) {
+      if (!update || typeof update.session_id !== "string") {
+        return;
+      }
       const index = state.liveFlows.findIndex(
         (f) => f.session_id === update.session_id
       );
@@ -67,12 +73,7 @@ export default new Vuex.Store({
     connectLiveFlow({ commit }, token) {
       import("../plugins/liveflow").then((module) => {
         const liveFlowService = module.default;
-        liveFlowService.on("connected", () => {
-          commit("SET_LIVE_FLOW_CONNECTED", true);
-        });
-        liveFlowService.on("disconnected", () => {
-          commit("SET_LIVE_FLOW_CONNECTED", false);
-        });
+        commit("SET_LIVE_FLOW_CONNECTED", liveFlowService.isConnected);
         liveFlowService.connect(token);
       });
     },

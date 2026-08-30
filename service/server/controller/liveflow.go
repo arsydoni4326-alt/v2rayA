@@ -1,7 +1,10 @@
 package controller
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -17,9 +20,19 @@ var liveFlowUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		return isSameOriginOrNonBrowser(r)
 	},
 	EnableCompression: true,
+}
+
+func isSameOriginOrNonBrowser(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// Non-browser diagnostic clients do not send Origin.
+		return true
+	}
+	originURL, err := url.Parse(origin)
+	return err == nil && strings.EqualFold(originURL.Host, r.Host)
 }
 
 // RateLimiter limits WebSocket connections per client
@@ -34,6 +47,12 @@ type ClientInfo struct {
 	LastConnect time.Time
 }
 
+const (
+	rateLimitWindow    = time.Minute
+	rateLimitRetention = 5 * time.Minute
+	rateLimitMaximum   = 5
+)
+
 var rateLimiter = &RateLimiter{
 	clients: make(map[string]*ClientInfo),
 }
@@ -43,29 +62,36 @@ func (r *RateLimiter) IsAllowed(clientID string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	now := time.Now()
+	for id, client := range r.clients {
+		if now.Sub(client.LastConnect) > rateLimitRetention {
+			delete(r.clients, id)
+		}
+	}
+
 	client, exists := r.clients[clientID]
 	if !exists {
 		r.clients[clientID] = &ClientInfo{
 			Connections: 1,
-			LastConnect: time.Now(),
+			LastConnect: now,
 		}
 		return true
 	}
 
 	// Reset counter if more than 1 minute has passed
-	if time.Since(client.LastConnect) > time.Minute {
+	if now.Sub(client.LastConnect) > rateLimitWindow {
 		client.Connections = 1
-		client.LastConnect = time.Now()
+		client.LastConnect = now
 		return true
 	}
 
 	// Limit to 5 connections per minute
-	if client.Connections >= 5 {
+	if client.Connections >= rateLimitMaximum {
 		return false
 	}
 
 	client.Connections++
-	client.LastConnect = time.Now()
+	client.LastConnect = now
 	return true
 }
 
@@ -73,8 +99,6 @@ func (r *RateLimiter) IsAllowed(clientID string) bool {
 func WsLiveFlow(ctx *gin.Context) {
 	logInfo("[LiveFlow] WebSocket connection request from %s", ctx.ClientIP())
 
-	// Get client identifier (IP + token)
-	clientID := ctx.ClientIP()
 	token := ctx.Query("token")
 	if token == "" {
 		token = ctx.Query("Authorization")
@@ -112,10 +136,11 @@ func WsLiveFlow(ctx *gin.Context) {
 		return
 	}
 
-	// Rate limiting
-	clientID += ":" + token[:8] // Use first 8 chars of token
+	// Rate-limit without retaining or logging the bearer token itself.
+	digest := sha256.Sum256([]byte(token))
+	clientID := fmt.Sprintf("%s:%x", ctx.ClientIP(), digest[:8])
 	if !rateLimiter.IsAllowed(clientID) {
-		logInfo("[LiveFlow] Rejected: rate limit exceeded for %s", clientID)
+		logInfo("[LiveFlow] Rejected: rate limit exceeded for %s", ctx.ClientIP())
 		ctx.JSON(http.StatusTooManyRequests, gin.H{
 			"code":    "FAIL",
 			"message": "rate limit exceeded",
@@ -136,9 +161,6 @@ func WsLiveFlow(ctx *gin.Context) {
 	h := service.NewLiveFlowHandler(conn)
 	h.Start()
 	defer h.Stop()
-
-	// Send initial batch state
-	h.SendBatchState()
 
 	// Keep connection alive until client disconnects
 	<-h.Done

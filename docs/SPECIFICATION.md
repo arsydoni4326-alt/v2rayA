@@ -169,6 +169,15 @@ ip(geoip:private) -> direct
 - Subscription management modal
 - Import/export dialogs
 
+### 5. Live Flow Topology
+
+- The **LIVE FLOW** tab displays an animated SVG route topology: source → selected proxy server/proxy chain → destination.
+- It filters observed routes by protocol, status, and selected proxy.
+- It must not represent observatory reachability or latency probes as user traffic.
+- Clicking a node or path shows the selected route metadata.
+- The graph supports dark theme, responsive horizontal scrolling, and reduced-motion preferences.
+- Current core route events supply source, destination, protocol, timestamp, and selected detour. Per-session byte/speed metrics and definitive close events are unavailable unless a future core metrics producer supplies them.
+
 ## API Specification
 
 ### 1. Authentication
@@ -277,6 +286,19 @@ Content-Type: application/json
   "routingA": "domain(suffix:google.com) -> proxy\n# ..."
 }
 ```
+
+### 5. Live Flow WebSocket
+
+```text
+GET /api/live-flow?token={token}
+Upgrade: websocket
+```
+
+- Authentication uses the existing JWT protection. Browser clients use the `token` query parameter; `Authorization` remains accepted for diagnostic compatibility.
+- A browser `Origin` host must match the request host. Origin-less non-browser diagnostic clients are allowed.
+- The server emits `batch_state`, `flow_start`, `flow_update`, and `flow_end` messages with a `{ "type", "data" }` envelope.
+- `flow_start.data` includes source endpoint, selected `proxy_chain`, destination endpoint, protocol, and timestamp.
+- The endpoint describes observed routes. It does not expose observatory health snapshots as flows.
 
 ## Non-Functional Requirements
 

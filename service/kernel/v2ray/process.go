@@ -155,35 +155,45 @@ func NewProcess(tmpl *Template,
 }
 
 type logInfoWriter struct {
+	mu        sync.Mutex
+	remainder string
 }
 
-func (w logInfoWriter) Write(p []byte) (n int, err error) {
-	s := string(p)
-	// trim the ending \n
-	length := len(s)
-	if s[length-1] == '\n' {
-		s = s[:length-1]
-	}
-	// print each line separately
-	lines := strings.Split(s, "\n")
-	for _, line := range lines {
-		// remove timestamp
-		fields := strings.SplitN(line, " ", 3)
-		if len(fields) >= 3 {
-			if _, err := time.Parse("2006/01/02 15:04:05", fields[0]+" "+fields[1]); err == nil {
-				log.Info("%v", fields[2])
-			} else {
-				log.Info("%v", line)
-			}
-		} else {
-			log.Info("%v", line)
-		}
+func (w *logInfoWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
+	w.remainder += string(p)
+	lines := strings.Split(w.remainder, "\n")
+	w.remainder = lines[len(lines)-1]
+	// Avoid retaining an unbounded malformed core output line.
+	if len(w.remainder) > 64*1024 {
+		log.Warn("v2ray-core: discarded oversized output line")
+		w.remainder = ""
+	}
+
+	for _, line := range lines[:len(lines)-1] {
+		w.handleLine(line)
 	}
 	return len(p), nil
 }
 
-var logWriter logInfoWriter
+func (w *logInfoWriter) handleLine(line string) {
+	if line == "" || ConsumeCoreLiveFlowEvent(line) {
+		return
+	}
+	// Remove a conventional core timestamp before forwarding the line.
+	fields := strings.SplitN(line, " ", 3)
+	if len(fields) >= 3 {
+		if _, err := time.Parse("2006/01/02 15:04:05", fields[0]+" "+fields[1]); err == nil {
+			log.Info("%v", fields[2])
+			return
+		}
+	}
+	log.Info("%v", line)
+}
+
+var logWriter = &logInfoWriter{}
 
 func (p *Process) Close() error {
 	p.mutex.Lock()
@@ -226,8 +236,10 @@ func RunWithLog(ctx context.Context, name string, argv []string, dir string, env
 	cmd.Args = argv
 	cmd.Dir = dir
 	cmd.Env = env
-	cmd.Stdout = logWriter
-	cmd.Stderr = logWriter
+	// os/exec may write stdout and stderr concurrently. They need independent
+	// line buffers so a private live-flow event cannot be spliced with stderr.
+	cmd.Stdout = &logInfoWriter{}
+	cmd.Stderr = &logInfoWriter{}
 	err := cmd.Start()
 	if err != nil {
 		return nil, err
@@ -255,7 +267,7 @@ func StartCoreProcess(ctx context.Context) (*os.Process, error) {
 	log.Info("Asset directory for %s: %v", "v2raya_core", assetDir)
 
 	// Prepare environment variables, filtering out duplicates
-	env := make([]string, 0, len(os.Environ())+4)
+	env := make([]string, 0, len(os.Environ())+5)
 	for _, e := range os.Environ() {
 		// Skip existing V2RAY_LOCATION_ASSET, XRAY_LOCATION_ASSET, V2RAY_CONF_GEOLOADER
 		if strings.HasPrefix(e, "V2RAY_LOCATION_ASSET=") ||
@@ -269,6 +281,9 @@ func StartCoreProcess(ctx context.Context) (*os.Process, error) {
 	// Add asset directory to environment based on core type.
 	// v2raya_core is based on xray-core and uses XRAY_LOCATION_ASSET.
 	env = append(env, "XRAY_LOCATION_ASSET="+assetDir)
+	// Enable the private structured route-event channel in the bundled core.
+	// The service consumes these lines before forwarding regular core output.
+	env = append(env, "V2RAYA_LIVE_FLOW=1")
 
 	// Check memory and set geoloader mode
 	memstat, err := mem.VirtualMemory()

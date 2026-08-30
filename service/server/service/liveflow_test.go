@@ -78,29 +78,31 @@ func TestLiveFlowMessageJSONEnvelope(t *testing.T) {
 	}
 }
 
-func TestObservatoryMessageJSONEnvelope(t *testing.T) {
-	encoded, err := json.Marshal(ObservatoryMessage{
-		ProduceTime: 1788075070,
-		Type:        "observatory",
-		Body: map[string]interface{}{
-			"outboundName": "proxy",
+func TestFlowStartJSONEnvelope(t *testing.T) {
+	encoded, err := json.Marshal(LiveFlowMessage{
+		Type: "flow_start",
+		Data: FlowStartData{
+			SessionID: "route-example",
+			ProxyChain: []ProxyNode{{
+				ProxyID: "server:example",
+				Name:    "Example server",
+				Type:    "vless",
+				Server:  "example.com:443",
+			}},
 		},
 	})
 	if err != nil {
-		t.Fatalf("marshal observatory message: %v", err)
+		t.Fatalf("marshal flow start message: %v", err)
 	}
 
 	var decoded map[string]interface{}
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
-		t.Fatalf("unmarshal observatory message: %v", err)
+		t.Fatalf("unmarshal flow start message: %v", err)
 	}
-	if decoded["type"] != "observatory" {
-		t.Errorf("expected type observatory, got %#v", decoded["type"])
+	if decoded["type"] != "flow_start" {
+		t.Errorf("expected type flow_start, got %#v", decoded["type"])
 	}
-	if _, ok := decoded["body"]; !ok {
-		t.Error("expected body field in observatory message")
-	}
-	if _, ok := decoded["data"]; ok {
-		t.Error("observatory message must not have a data wrapper")
+	if _, ok := decoded["data"]; !ok {
+		t.Error("expected data field in flow start message")
 	}
 }

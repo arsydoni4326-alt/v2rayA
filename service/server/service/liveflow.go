@@ -10,7 +10,28 @@ import (
 	"github.com/v2rayA/v2rayA/pkg/util/log"
 )
 
-// LiveFlowSession represents a single proxy flow session
+// FlowEndpoint identifies an endpoint in the live-flow WebSocket schema.
+type FlowEndpoint struct {
+	IP     string `json:"ip"`
+	Port   int    `json:"port"`
+	Domain string `json:"domain,omitempty"`
+}
+
+// ProxyNode identifies a selected server or another proxy-chain hop.
+type ProxyNode struct {
+	ProxyID string `json:"proxy_id"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Server  string `json:"server"`
+}
+
+// User represents user information when a core event makes it available.
+type User struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// LiveFlowSession represents a live proxy session.
 type LiveFlowSession struct {
 	SessionID   string            `json:"session_id"`
 	Source      FlowEndpoint      `json:"source"`
@@ -24,45 +45,16 @@ type LiveFlowSession struct {
 	BytesSent   uint64            `json:"bytes_sent"`
 	BytesRecv   uint64            `json:"bytes_recv"`
 	SpeedBPS    uint64            `json:"speed_bps"`
-	Status      string            `json:"status"` // active, idle, error
+	Status      string            `json:"status"`
 }
 
-// FlowEndpoint represents source or destination endpoint
-type FlowEndpoint struct {
-	IP     string `json:"ip"`
-	Port   int    `json:"port"`
-	Domain string `json:"domain,omitempty"`
-}
-
-// ProxyNode represents a proxy in the chain
-type ProxyNode struct {
-	ProxyID string `json:"proxy_id"`
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	Server  string `json:"server"`
-}
-
-// User represents user information
-type User struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-}
-
-// LiveFlowMessage represents WebSocket message for live flow
+// LiveFlowMessage is the WebSocket protocol envelope.
 type LiveFlowMessage struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data"`
 }
 
-// ObservatoryMessage is the API feed envelope consumed by the dashboard.
-// It deliberately matches the established /api/message WebSocket protocol.
-type ObservatoryMessage struct {
-	ProduceTime int64       `json:"produce_time"`
-	Type        string      `json:"type"`
-	Body        interface{} `json:"body"`
-}
-
-// FlowStartData represents flow start message data
+// FlowStartData represents flow_start data.
 type FlowStartData struct {
 	SessionID   string            `json:"session_id"`
 	Source      FlowEndpoint      `json:"source"`
@@ -74,7 +66,7 @@ type FlowStartData struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
-// FlowUpdateData represents flow update message data
+// FlowUpdateData represents flow_update data.
 type FlowUpdateData struct {
 	SessionID    string `json:"session_id"`
 	SpeedBPS     uint64 `json:"speed_bps"`
@@ -84,7 +76,7 @@ type FlowUpdateData struct {
 	Status       string `json:"status"`
 }
 
-// FlowEndData represents flow end message data
+// FlowEndData represents flow_end data.
 type FlowEndData struct {
 	SessionID      string  `json:"session_id"`
 	EndTime        string  `json:"end_time"`
@@ -94,56 +86,80 @@ type FlowEndData struct {
 	EndReason      string  `json:"end_reason"`
 }
 
-// BatchStateData represents batch state message data
+// BatchStateData represents the initial state sent to a connected client.
 type BatchStateData struct {
 	Sessions    []FlowStartData `json:"sessions"`
 	Timestamp   string          `json:"timestamp"`
 	TotalActive int             `json:"total_active"`
 }
 
-// LiveFlowHandler manages WebSocket connections for live flow visualization
+const (
+	liveFlowWriteWait = 10 * time.Second
+	liveFlowPongWait  = 60 * time.Second
+	liveFlowPingEvery = 30 * time.Second
+	liveFlowMaxRead   = 1024
+)
+
+// LiveFlowHandler bridges the shared kernel live_flow feed to one WebSocket.
 type LiveFlowHandler struct {
-	conn     *websocket.Conn
-	sessions map[string]*LiveFlowSession
-	mu       sync.RWMutex
-	send     chan interface{}
-	Done     chan struct{}
-	// Feed subscription
-	observatoryBox *v2ray.Box
-	feedCancel     func()
-	// Throttling
-	lastUpdate     time.Time
-	updateInterval time.Duration
+	conn       *websocket.Conn
+	send       chan interface{}
+	Done       chan struct{}
+	stopOnce   sync.Once
+	feedBox    *v2ray.Box
+	feedCancel func()
 }
 
-// NewLiveFlowHandler creates a new live flow handler
+// NewLiveFlowHandler creates a handler for one authenticated client.
 func NewLiveFlowHandler(conn *websocket.Conn) *LiveFlowHandler {
-	h := &LiveFlowHandler{
-		conn:           conn,
-		sessions:       make(map[string]*LiveFlowSession),
-		send:           make(chan interface{}, 256),
-		Done:           make(chan struct{}),
-		lastUpdate:     time.Now(),
-		updateInterval: 100 * time.Millisecond, // 10 updates per second max
+	return &LiveFlowHandler{
+		conn: conn,
+		send: make(chan interface{}, 256),
+		Done: make(chan struct{}),
 	}
-	return h
 }
 
-// Start begins the live flow handler — subscribes to observatory feed and starts pumps
+// Start subscribes to real route-session events and starts the read/write pumps.
 func (h *LiveFlowHandler) Start() {
-	h.subscribeToObservatoryFeed()
+	if h.subscribeToLiveFlowFeed() {
+		// Queue the snapshot before forwarding the subscription. A route that
+		// arrives between subscription and snapshot may be duplicated, but it
+		// cannot be lost when a later stale batch overwrites client state.
+		h.SendBatchState()
+		h.forwardLiveFlowFeed()
+	}
 	go h.writePump()
 	go h.readPump()
 }
 
-// AddSession adds a new flow session
-func (h *LiveFlowHandler) AddSession(session *LiveFlowSession) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.sessions[session.SessionID] = session
+// SendBatchState sends active route sessions accumulated before connection.
+func (h *LiveFlowHandler) SendBatchState() {
+	producer := v2ray.GetLiveFlowProducer()
+	producer.Start()
 
-	// Send flow start message
-	msg := LiveFlowMessage{
+	snapshot := producer.Snapshot()
+	sessions := make([]FlowStartData, 0, len(snapshot))
+	for _, session := range snapshot {
+		sessions = append(sessions, flowStartDataFromKernel(session))
+	}
+
+	h.enqueue(LiveFlowMessage{
+		Type: "batch_state",
+		Data: BatchStateData{
+			Sessions:    sessions,
+			Timestamp:   time.Now().UTC().Format(time.RFC3339Nano),
+			TotalActive: len(sessions),
+		},
+	})
+}
+
+// AddSession remains available for services that originate a complete flow
+// directly. Kernel route events use the shared producer path above.
+func (h *LiveFlowHandler) AddSession(session *LiveFlowSession) {
+	if session == nil {
+		return
+	}
+	h.enqueue(LiveFlowMessage{
 		Type: "flow_start",
 		Data: FlowStartData{
 			SessionID:   session.SessionID,
@@ -155,120 +171,110 @@ func (h *LiveFlowHandler) AddSession(session *LiveFlowSession) {
 			User:        session.User,
 			Metadata:    session.Metadata,
 		},
-	}
-	h.send <- msg
+	})
 }
 
-// UpdateSession updates an existing flow session
+// UpdateSession emits a session update. The caller is responsible for deriving
+// counters from a source that actually exposes per-session traffic statistics.
 func (h *LiveFlowHandler) UpdateSession(sessionID string, bytesSent, bytesRecv, speedBPS uint64, status string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	session, exists := h.sessions[sessionID]
-	if !exists {
-		return
-	}
-
-	session.BytesSent = bytesSent
-	session.BytesRecv = bytesRecv
-	session.SpeedBPS = speedBPS
-	session.Status = status
-	session.LastUpdate = time.Now()
-
-	// Throttle updates
-	now := time.Now()
-	if now.Sub(h.lastUpdate) < h.updateInterval {
-		return
-	}
-	h.lastUpdate = now
-
-	// Send flow update message
-	msg := LiveFlowMessage{
+	h.enqueue(LiveFlowMessage{
 		Type: "flow_update",
 		Data: FlowUpdateData{
 			SessionID:    sessionID,
 			SpeedBPS:     speedBPS,
 			BytesSent:    bytesSent,
 			BytesRecv:    bytesRecv,
-			LastActivity: session.LastUpdate.Format(time.RFC3339),
+			LastActivity: time.Now().UTC().Format(time.RFC3339Nano),
 			Status:       status,
 		},
-	}
-	h.send <- msg
+	})
 }
 
-// EndSession ends a flow session
-// GetActiveSessions returns all active sessions
-func (h *LiveFlowHandler) GetActiveSessions() []FlowStartData {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	sessions := make([]FlowStartData, 0, len(h.sessions))
-	for _, session := range h.sessions {
-		sessions = append(sessions, FlowStartData{
-			SessionID:   session.SessionID,
-			Source:      session.Source,
-			ProxyChain:  session.ProxyChain,
-			Destination: session.Destination,
-			Protocol:    session.Protocol,
-			StartTime:   session.StartTime,
-			User:        session.User,
-			Metadata:    session.Metadata,
-		})
-	}
-	return sessions
-}
-
-// SendBatchState sends current state to newly connected client
-func (h *LiveFlowHandler) SendBatchState() {
-	sessions := h.GetActiveSessions()
-	msg := LiveFlowMessage{
-		Type: "batch_state",
-		Data: BatchStateData{
-			Sessions:    sessions,
-			Timestamp:   time.Now().Format(time.RFC3339),
-			TotalActive: len(sessions),
+// EndSession emits a session end event.
+func (h *LiveFlowHandler) EndSession(sessionID string, reason string) {
+	h.enqueue(LiveFlowMessage{
+		Type: "flow_end",
+		Data: FlowEndData{
+			SessionID: sessionID,
+			EndTime:   time.Now().UTC().Format(time.RFC3339Nano),
+			EndReason: reason,
 		},
-	}
-	h.send <- msg
+	})
 }
 
-// readPump reads messages from the WebSocket connection
-func (h *LiveFlowHandler) readPump() {
-	defer func() {
-		h.Stop()
+// GenerateSessionID generates a unique session ID for direct producers.
+func GenerateSessionID() string {
+	return uuid.New().String()
+}
+
+func (h *LiveFlowHandler) subscribeToLiveFlowFeed() bool {
+	producer := v2ray.GetLiveFlowProducer()
+	producer.Start()
+
+	box := v2ray.ApiFeed.SubscribeMessage(v2ray.LiveFlowProduct)
+	if box == nil {
+		log.Error("LiveFlow: failed to subscribe to live-flow feed")
+		return false
+	}
+	h.feedBox = box
+	h.feedCancel = box.Cancel
+	return true
+}
+
+func (h *LiveFlowHandler) forwardLiveFlowFeed() {
+	if h.feedBox == nil {
+		return
+	}
+	go func() {
+		for message := range h.feedBox.Messages {
+			h.enqueue(message.Body)
+		}
 	}()
+}
+
+func (h *LiveFlowHandler) enqueue(message interface{}) {
+	select {
+	case <-h.Done:
+		return
+	case h.send <- message:
+	default:
+		// Dropping a stale update is preferable to blocking the shared feed or
+		// retaining unbounded traffic metadata for a slow browser.
+	}
+}
+
+func (h *LiveFlowHandler) readPump() {
+	defer h.Stop()
+	h.conn.SetReadLimit(liveFlowMaxRead)
+	_ = h.conn.SetReadDeadline(time.Now().Add(liveFlowPongWait))
+	h.conn.SetPongHandler(func(string) error {
+		return h.conn.SetReadDeadline(time.Now().Add(liveFlowPongWait))
+	})
 	for {
-		_, _, err := h.conn.ReadMessage()
-		if err != nil {
-			break
+		if _, _, err := h.conn.ReadMessage(); err != nil {
+			return
 		}
 	}
 }
 
-// writePump writes messages to the WebSocket connection
 func (h *LiveFlowHandler) writePump() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(liveFlowPingEvery)
 	defer func() {
 		ticker.Stop()
-		h.conn.Close()
+		h.Stop()
 	}()
 
 	for {
 		select {
 		case <-h.Done:
 			return
-		case message, ok := <-h.send:
-			if !ok {
-				h.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
-			h.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		case message := <-h.send:
+			_ = h.conn.SetWriteDeadline(time.Now().Add(liveFlowWriteWait))
 			if err := h.conn.WriteJSON(message); err != nil {
 				return
 			}
 		case <-ticker.C:
-			h.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = h.conn.SetWriteDeadline(time.Now().Add(liveFlowWriteWait))
 			if err := h.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -276,83 +282,41 @@ func (h *LiveFlowHandler) writePump() {
 	}
 }
 
-// GenerateSessionID generates a unique session ID
-func GenerateSessionID() string {
-	return uuid.New().String()
-}
-
-// subscribeToObservatoryFeed subscribes to the observatory product on ApiFeed
-// and forwards messages to the WebSocket send channel.
-func (h *LiveFlowHandler) subscribeToObservatoryFeed() {
-	box := v2ray.ApiFeed.SubscribeMessage("observatory")
-	if box == nil {
-		log.Error("LiveFlow: failed to subscribe to observatory feed (product not registered)")
-		return
-	}
-	h.observatoryBox = box
-	h.feedCancel = box.Cancel
-
-	log.Info("LiveFlow: subscribed to observatory feed")
-
-	go func() {
-		for msg := range box.Messages {
-			// Forward the observatory message directly to the WebSocket.
-			// Format matches /api/message: { produce_time, type, body }
-			select {
-			case h.send <- ObservatoryMessage{
-				ProduceTime: msg.ProduceTime,
-				Type:        msg.Product,
-				Body:        msg.Body,
-			}:
-			case <-h.Done:
-				return
-			default:
-				// Channel full, drop message to avoid blocking
-			}
-		}
-	}()
-}
-func (h *LiveFlowHandler) EndSession(sessionID string, reason string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	session, exists := h.sessions[sessionID]
-	if !exists {
-		return
-	}
-
-	endTime := time.Now()
-	duration := endTime.Sub(session.StartTime).Seconds()
-
-	// Send flow end message
-	msg := LiveFlowMessage{
-		Type: "flow_end",
-		Data: FlowEndData{
-			SessionID:      sessionID,
-			EndTime:        endTime.Format(time.RFC3339),
-			TotalBytesSent: session.BytesSent,
-			TotalBytesRecv: session.BytesRecv,
-			DurationSecs:   duration,
-			EndReason:      reason,
-		},
-	}
-	h.send <- msg
-
-	// Remove session
-	delete(h.sessions, sessionID)
-}
-
-// Stop stops the live flow handler
+// Stop releases the feed subscription and closes the WebSocket exactly once.
 func (h *LiveFlowHandler) Stop() {
-	select {
-	case <-h.Done:
-		// Already closed
-	default:
+	h.stopOnce.Do(func() {
 		close(h.Done)
+		if h.feedCancel != nil {
+			h.feedCancel()
+		}
+		_ = h.conn.Close()
+	})
+}
+
+func flowStartDataFromKernel(session v2ray.LiveFlowStartData) FlowStartData {
+	chain := make([]ProxyNode, 0, len(session.ProxyChain))
+	for _, proxy := range session.ProxyChain {
+		chain = append(chain, ProxyNode{
+			ProxyID: proxy.ProxyID,
+			Name:    proxy.Name,
+			Type:    proxy.Type,
+			Server:  proxy.Server,
+		})
 	}
-	// Cancel feed subscription if active
-	if h.feedCancel != nil {
-		h.feedCancel()
+	return FlowStartData{
+		SessionID: session.SessionID,
+		Source: FlowEndpoint{
+			IP:     session.Source.IP,
+			Port:   session.Source.Port,
+			Domain: session.Source.Domain,
+		},
+		ProxyChain: chain,
+		Destination: FlowEndpoint{
+			IP:     session.Destination.IP,
+			Port:   session.Destination.Port,
+			Domain: session.Destination.Domain,
+		},
+		Protocol:  session.Protocol,
+		StartTime: session.StartTime,
 	}
-	h.conn.Close()
 }

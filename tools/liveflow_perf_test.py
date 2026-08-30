@@ -13,11 +13,9 @@ Requirements:
 """
 
 import argparse
-import json
 import time
 import threading
 import websocket
-from datetime import datetime
 
 
 class LiveFlowPerformanceTest:
@@ -29,6 +27,8 @@ class LiveFlowPerformanceTest:
         self.duration = duration
         self.connections = []
         self.messages_received = 0
+        self.connections_opened = 0
+        self.connections_closed = 0
         self.errors = 0
         self.start_time = None
         self.end_time = None
@@ -44,13 +44,15 @@ class LiveFlowPerformanceTest:
         print(f"Error: {error}")
         
     def on_close(self, ws, close_status_code, close_msg):
-        pass
+        with self.lock:
+            self.connections_closed += 1
         
     def on_open(self, ws):
-        pass
+        with self.lock:
+            self.connections_opened += 1
         
     def create_connection(self):
-        url = f"ws://{self.host}:{self.port}/api/live-flow?Authorization={self.token}"
+        url = f"ws://{self.host}:{self.port}/api/live-flow?token={self.token}"
         ws = websocket.WebSocketApp(
             url,
             on_message=self.on_message,
@@ -88,12 +90,14 @@ class LiveFlowPerformanceTest:
         messages_per_second = self.messages_received / duration if duration > 0 else 0
         
         print("\n=== Performance Test Results ===")
-        print(f"Connections: {self.num_connections}")
+        print(f"Connections requested: {self.num_connections}")
+        print(f"Connections opened: {self.connections_opened}")
+        print(f"Connections closed: {self.connections_closed}")
         print(f"Duration: {duration:.2f} seconds")
         print(f"Messages received: {self.messages_received}")
         print(f"Messages per second: {messages_per_second:.2f}")
         print(f"Errors: {self.errors}")
-        print(f"Average latency: {(duration / self.messages_received * 1000):.2f}ms" if self.messages_received > 0 else "N/A")
+        print("Note: this tool measures WebSocket connection/message throughput, not route latency.")
 
 
 def main():
@@ -101,7 +105,7 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Server host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=2017, help="Server port (default: 2017)")
     parser.add_argument("--token", required=True, help="JWT authentication token")
-    parser.add_argument("--connections", type=int, default=10, help="Number of concurrent connections (default: 10)")
+    parser.add_argument("--connections", type=int, default=5, help="Number of concurrent connections (default: 5)")
     parser.add_argument("--duration", type=int, default=30, help="Test duration in seconds (default: 30)")
     
     args = parser.parse_args()

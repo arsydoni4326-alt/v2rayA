@@ -21,6 +21,7 @@ var (
 	ApiProducts = []string{
 		"observatory",
 		"running_state",
+		LiveFlowProduct,
 	}
 	ApiFeed *Feed
 )

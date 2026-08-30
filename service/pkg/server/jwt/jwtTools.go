@@ -23,8 +23,8 @@ func stripBearerPrefixFromTokenString(tok string) (string, error) {
 // AuthorizationArgumentExtractor extracts bearer token from Argument header
 // Uses PostExtractionFilter to strip "Bearer " prefix from header
 var AuthorizationArgumentExtractor = &request.PostExtractionFilter{
-	request.ArgumentExtractor{"Authorization"},
-	stripBearerPrefixFromTokenString,
+	Extractor: request.ArgumentExtractor{"Authorization"},
+	Filter:    stripBearerPrefixFromTokenString,
 }
 
 func JWTAuth(Admin bool) gin.HandlerFunc {
@@ -48,7 +48,11 @@ func JWTAuth(Admin bool) gin.HandlerFunc {
 			}
 			// If still no token, try query parameter (for WebSocket connections)
 			if err != nil && errors.Is(err, request.ErrNoTokenInRequest) {
-				if queryToken := ctx.Query("token"); queryToken != "" {
+				queryToken := ctx.Query("token")
+				if queryToken == "" {
+					queryToken = ctx.Query("Authorization")
+				}
+				if queryToken != "" {
 					token, err = jwt.ParseWithClaims(queryToken, jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
 						return getSecret(), nil
 					}, jwt.WithValidMethods([]string{"HS256"}))
