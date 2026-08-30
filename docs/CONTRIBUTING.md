@@ -66,6 +66,28 @@ go build -o v2raya-dev
 ./v2raya-dev --lite --config ./dev-config
 ```
 
+### Regenerating Xray Protobuf Bindings
+
+`core/xray/` is a submodule with checked-in Go protobuf bindings. When changing an
+Xray `.proto` file, especially its `option go_package`, regenerate every binding;
+do not manually edit a generated `*.pb.go` raw descriptor. Raw descriptors are
+protobuf wire data, so textual path replacements leave invalid length prefixes.
+
+Use `protoc` 33.5 and `protoc-gen-go` 1.36.11, then run:
+
+```bash
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+
+cd core/xray
+PATH="$(go env GOPATH)/bin:$PATH" protoc -I . \
+  --go_out=. --go_opt=paths=source_relative \
+  $(find . -path './.git' -prune -o -name '*.proto' -print | sort)
+
+go test ./common/serial
+```
+
+Commit the regenerated `*.pb.go` files with their corresponding `.proto` changes.
+
 ### Frontend (Vue.js)
 
 ```bash

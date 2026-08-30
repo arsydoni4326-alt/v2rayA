@@ -31,8 +31,10 @@ RUN set -eux;   \
 COPY ./service/go.mod ./service/go.sum ./
 COPY ./core/xray ./xray/
 RUN set -eux;   \
+    go mod tidy; \
     go mod download
 COPY ./service .
+RUN go mod tidy
 COPY --from=builder-web /web ./server/router/web
 RUN set -eux;   \
     export BUILD_DATE="$(date +%Y-%m-%d)";   \
@@ -66,8 +68,10 @@ RUN set -eux;   \
 COPY ./core/go.mod ./core/go.sum ./
 COPY ./core/xray ./xray/
 RUN set -eux;   \
+    go mod tidy; \
     go mod download
 COPY ./core .
+RUN go mod tidy
 COPY --from=builder-web /web ./server/router/web
 RUN set -eux;   \
     export BUILD_DATE="$(date +%Y-%m-%d)";   \
