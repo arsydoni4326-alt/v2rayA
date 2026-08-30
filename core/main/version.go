@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/xtls/xray-core/main/commands/base"
+	"github.com/arsydoni4326-alt/xray-core/main/commands/base"
 )
 
 // Version is the v2rayA version, injected at build time via -ldflags.

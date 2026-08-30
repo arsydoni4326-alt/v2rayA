@@ -1540,7 +1540,7 @@ export default {
       switch (srcObj.protocol) {
         case "vless":
           // todo: support reality and xhttp
-          // https://github.com/XTLS/Xray-core/discussions/716
+          // https://github.com/arsydoni4326-alt/xray-core/discussions/716
           query = {
             type: srcObj.net,
             flow: srcObj.flow || "",

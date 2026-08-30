@@ -13,7 +13,7 @@ require (
 	github.com/daeuniverse/softwind v0.0.0-20231230065827-eed67f20d2c1
 	github.com/miekg/dns v1.1.72
 	github.com/sagernet/sing v0.5.1
-	github.com/xtls/xray-core v0.0.0-local
+	github.com/arsydoni4326-alt/xray-core main
 	golang.org/x/sys v0.47.0
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
@@ -80,6 +80,6 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/xtls/xray-core => ./xray
+replace github.com/arsydoni4326-alt/xray-core => ./xray
 
 replace anytls v0.0.12 => github.com/anytls/anytls-go v0.0.12

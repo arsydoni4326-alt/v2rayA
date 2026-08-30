@@ -684,7 +684,7 @@ func (v *V2Ray) Configuration(info PriorInfo) (c Configuration, err error) {
 func (v *V2Ray) ExportToURL() string {
 	switch v.Protocol {
 	case "vless":
-		// https://github.com/XTLS/Xray-core/issues/91
+		// https://github.com/arsydoni4326-alt/xray-core/issues/91
 		var query = make(url.Values)
 		setValue(&query, "type", v.Net)
 		setValue(&query, "security", v.TLS)

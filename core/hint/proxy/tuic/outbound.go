@@ -13,13 +13,13 @@ import (
 	"github.com/daeuniverse/outbound/protocol/direct"
 	_ "github.com/daeuniverse/outbound/protocol/tuic" // register tuic protocol
 
-	"github.com/xtls/xray-core/common"
-	xray_buf "github.com/xtls/xray-core/common/buf"
-	"github.com/xtls/xray-core/common/errors"
-	xray_session "github.com/xtls/xray-core/common/session"
-	"github.com/xtls/xray-core/common/task"
-	"github.com/xtls/xray-core/transport"
-	"github.com/xtls/xray-core/transport/internet"
+	"github.com/arsydoni4326-alt/xray-core/common"
+	xray_buf "github.com/arsydoni4326-alt/xray-core/common/buf"
+	"github.com/arsydoni4326-alt/xray-core/common/errors"
+	xray_session "github.com/arsydoni4326-alt/xray-core/common/session"
+	"github.com/arsydoni4326-alt/xray-core/common/task"
+	"github.com/arsydoni4326-alt/xray-core/transport"
+	"github.com/arsydoni4326-alt/xray-core/transport/internet"
 
 	"github.com/v2rayA/v2raya-core/hint/tlsutil"
 )
