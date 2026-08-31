@@ -107,6 +107,11 @@ func (h *SOCKS) GetProtocol() string {
 	return h.Protocol
 }
 
+func (h *SOCKS) GetSecurity() string {
+	// SOCKS has no built-in encryption
+	return "none"
+}
+
 func (h *SOCKS) GetHostname() string {
 	return h.Server
 }

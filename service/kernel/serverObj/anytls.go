@@ -114,6 +114,11 @@ func (s *AnyTLS) GetProtocol() string {
 	return s.Protocol
 }
 
+func (s *AnyTLS) GetSecurity() string {
+	// AnyTLS uses TLS
+	return "tls"
+}
+
 func (s *AnyTLS) GetHostname() string {
 	return s.Server
 }

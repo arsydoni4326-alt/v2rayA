@@ -3,6 +3,7 @@ package touch
 import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/v2rayA/v2rayA/db/configure"
+	"github.com/v2rayA/v2rayA/kernel/serverObj"
 	"github.com/v2rayA/v2rayA/pkg/util/log"
 	"net"
 	"net/url"
@@ -20,24 +21,27 @@ type Touch struct {
 	ConnectedServers []*configure.Which `json:"connectedServer"` //冗余一个信息，方便查找
 }
 type Server struct {
-	ID           int                 `json:"id"`
-	TYPE         configure.TouchType `json:"_type"`
-	Name         string              `json:"name"`
-	Address      string              `json:"address"`
-	Net          string              `json:"net"`
-	PingLatency  string              `json:"pingLatency"`
-	DisableReason string             `json:"disableReason,omitempty"`
+	ID            int                 `json:"id"`
+	TYPE          configure.TouchType `json:"_type"`
+	Name          string              `json:"name"`
+	Address       string              `json:"address"`
+	Net           string              `json:"net"`
+	Security     string               `json:"security"`
+	Protocol      string              `json:"protocol"`
+	Encryptions   []string            `json:"encryptions"`
+	PingLatency   string              `json:"pingLatency"`
+	DisableReason string              `json:"disableReason,omitempty"`
 }
 type Subscription struct {
-	Remarks string              `json:"remarks,omitempty"`
-	ID      int                 `json:"id"`
-	TYPE    configure.TouchType `json:"_type"`
-	Host    string              `json:"host"`
-	Address string              `json:"address"`
-	Status  SubscriptionStatus  `json:"status"`
-	Info    string              `json:"info"`
-	Servers []Server            `json:"servers"`
-	AutoSelect bool             `json:"autoSelect"`
+	Remarks    string              `json:"remarks,omitempty"`
+	ID         int                 `json:"id"`
+	TYPE       configure.TouchType `json:"_type"`
+	Host       string              `json:"host"`
+	Address    string              `json:"address"`
+	Status     SubscriptionStatus  `json:"status"`
+	Info       string              `json:"info"`
+	Servers    []Server            `json:"servers"`
+	AutoSelect bool                `json:"autoSelect"`
 }
 
 func NewUpdateStatus() SubscriptionStatus {
@@ -67,6 +71,9 @@ func serverRawsToServers(rss []configure.ServerRaw) (ts []Server) {
 			Name:        v.ServerObj.GetName(),
 			Address:     address,
 			Net:         v.ServerObj.ProtoToShow(),
+			Protocol:    v.ServerObj.GetProtocol(),
+			Security:    v.ServerObj.GetSecurity(),
+			Encryptions: serverObj.EncryptionTypes(v.ServerObj),
 			PingLatency: v.Latency,
 		}
 		if d, ok := v.ServerObj.(disablable); ok {
@@ -100,14 +107,14 @@ func GenerateTouch() (t Touch) {
 			}
 		}
 		t.Subscriptions[i] = Subscription{
-			Remarks: v.Remarks,
-			ID:      i + 1,
-			Host:    u.Host,
-			Address: v.Address,
-			Status:  SubscriptionStatus(v.Status),
-			Servers: serverRawsToServers(v.Servers),
-			Info:    v.Info,
-			AutoSelect:  v.AutoSelect,
+			Remarks:    v.Remarks,
+			ID:         i + 1,
+			Host:       u.Host,
+			Address:    v.Address,
+			Status:     SubscriptionStatus(v.Status),
+			Servers:    serverRawsToServers(v.Servers),
+			Info:       v.Info,
+			AutoSelect: v.AutoSelect,
 		}
 	}
 	t.ConnectedServers = configure.GetConnectedServers().Get()

@@ -799,6 +799,13 @@ func (v *V2Ray) GetProtocol() string {
 	return v.Protocol
 }
 
+func (v *V2Ray) GetSecurity() string {
+	if v.TLS != "" && v.TLS != "none" {
+		return v.TLS
+	}
+	return "none"
+}
+
 func (v *V2Ray) GetHostname() string {
 	return v.Add
 }
@@ -825,9 +832,23 @@ func isPrivateAddress(addr string) bool {
 		strings.HasSuffix(lower, ".localhost")
 }
 
+func isTLSEnabled(tls string) bool {
+	tls = strings.TrimSpace(tls)
+	// "reality" is a connection obfuscation layer, not traditional TLS encryption.
+	if strings.EqualFold(tls, "reality") {
+		return false
+	}
+	return tls != "" && !strings.EqualFold(tls, "none") && !strings.EqualFold(tls, "false")
+}
+
+func isNoneOrFalse(value string) bool {
+	return strings.EqualFold(strings.TrimSpace(value), "none") ||
+		strings.EqualFold(strings.TrimSpace(value), "false")
+}
+
 // DisableReason returns a non-empty string when this V2Ray server
-// configuration is known to be incompatible with the bundled xray-core,
-// explaining why the server should be disabled in the UI.
+// configuration is known to be incompatible with the bundled xray-core or is
+// excluded by v2rayA's server policy, explaining why it is disabled in the UI.
 func (v *V2Ray) DisableReason(name, address string) string {
 	// Reality with empty pbk — broken config, will always fail
 	if v.TLS == "reality" && v.PublicKey == "" {
@@ -842,11 +863,23 @@ func (v *V2Ray) DisableReason(name, address string) string {
 	if v.Net == "xhttp" {
 		return fmt.Sprintf("[%s (%s)] XHTTP transport is not supported by this core", name, address)
 	}
-	// VLESS without TLS or other encryption is prohibited for public addresses
-	if v.Protocol == "vless" && (v.TLS == "" || v.TLS == "none") {
-		if !isPrivateAddress(v.Add) {
-			return fmt.Sprintf("[%s (%s)] VLESS without TLS is prohibited for public addresses", name, address)
-		}
+	// A VLESS outbound always uses protocol encryption "none". For VMess, the
+	// subscription's scy field carries the configured encryption value.
+	if (strings.EqualFold(v.Protocol, "vmess") || strings.EqualFold(v.Protocol, "vless")) &&
+		isTLSEnabled(v.TLS) &&
+		(strings.EqualFold(v.Protocol, "vless") || isNoneOrFalse(v.Security)) {
+		return fmt.Sprintf("[%s (%s)] TLS with encryption none or false is excluded", name, address)
+	}
+	// VLESS without TLS is always excluded — VLESS always uses protocol
+	// encryption "none", so without TLS the traffic is completely plaintext.
+	// security=false or security=none in VLESS URLs sets v.TLS to "false" or "none".
+	if strings.EqualFold(v.Protocol, "vless") && (v.TLS == "" || strings.EqualFold(v.TLS, "none") || strings.EqualFold(v.TLS, "false")) {
+		return fmt.Sprintf("[%s (%s)] VLESS without TLS is excluded", name, address)
+	}
+	// VMess without TLS but with encryption none or false is also excluded.
+	// security=false in URLs sets v.TLS to "false", which must also be caught.
+	if strings.EqualFold(v.Protocol, "vmess") && (v.TLS == "" || strings.EqualFold(v.TLS, "none") || strings.EqualFold(v.TLS, "false")) && isNoneOrFalse(v.Security) {
+		return fmt.Sprintf("[%s (%s)] VMess without TLS and encryption none or false is excluded", name, address)
 	}
 	return ""
 }

@@ -21,9 +21,11 @@ We are committed to providing the simplest operation and meeting most needs. Tha
 - **Web-based GUI:** Manage your proxy settings via any modern browser
 - **Cross-platform:** Runs on Linux, Windows, and macOS
 - **Automatic Updates:** Auto-update PAC files, GFW lists, and subscriptions
+- **Server filters:** Local-server and per-subscription protocol/encryption filters in separate control panels, with dynamically derived options
+- **Server eligibility:** TLS-enabled VMess/VLESS entries with `none` or `false` encryption, and VLESS servers without TLS (`security=false`, `security=none`, or empty TLS) remain visible with a reason but cannot be selected or connected; latency bulk addition is available only from a server table
 - **Routing rules:** Powerful routing capabilities based on RoutingA and V2Ray/XRay routing
 - **Containerized:** Official Docker images available
-- **Live Flow Topology:** Experimental SVG diagram of observed routes from source through the selected proxy to destination
+- **Live Flow Topology:** Experimental SVG diagram of observed routes from source through the selected proxy to destination, excluding the internal `gstatic.com:443` latency probe
 
 ## Architecture
 

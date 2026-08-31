@@ -207,6 +207,11 @@ func (p *LiveFlowProducer) RecordCoreAccess(event CoreLiveFlowEvent) {
 		log.Warn("LiveFlow: discarded access event with invalid destination")
 		return
 	}
+	// The service's HTTP latency test uses this endpoint. It is a health probe,
+	// not user traffic, and would otherwise create a high-volume topology node.
+	if isLiveFlowProbeDestination(destination) {
+		return
+	}
 
 	protocol := destinationProtocol
 	if protocol == "" {
@@ -328,6 +333,11 @@ func parseLiveFlowEndpoint(raw string) (LiveFlowEndpoint, string, bool) {
 		endpoint.Domain = host
 	}
 	return endpoint, protocol, true
+}
+
+func isLiveFlowProbeDestination(endpoint LiveFlowEndpoint) bool {
+	return endpoint.Port == 443 &&
+		strings.EqualFold(strings.TrimSuffix(endpoint.Domain, "."), "gstatic.com")
 }
 
 func proxyChainFromDetour(detour string) []LiveFlowProxyNode {
