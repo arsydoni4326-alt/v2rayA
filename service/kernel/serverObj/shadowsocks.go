@@ -415,6 +415,15 @@ func (s *Shadowsocks) DisableReason(name, address string) string {
 	if strings.EqualFold(s.Cipher, "rc4-md5") {
 		return fmt.Sprintf("[%s (%s)] rc4-md5 is an insecure cipher and is not supported", name, address)
 	}
+	if strings.EqualFold(s.Cipher, "aes-128-cfb") {
+		return fmt.Sprintf("[%s (%s)] aes-128-cfb is an insecure cipher and is not supported", name, address)
+	}
+	if strings.EqualFold(s.Cipher, "chacha20-ietf") {
+		return fmt.Sprintf("[%s (%s)] chacha20-ietf is an insecure cipher and is not supported", name, address)
+	}
+	if strings.EqualFold(s.Cipher, "aes-256-cfb") {
+		return fmt.Sprintf("[%s (%s)] aes-256-cfb is an insecure cipher and is not supported", name, address)
+	}
 	return ""
 }
 
