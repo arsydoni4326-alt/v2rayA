@@ -870,10 +870,13 @@ func (v *V2Ray) DisableReason(name, address string) string {
 		(strings.EqualFold(v.Protocol, "vless") || isNoneOrFalse(v.Security)) {
 		return fmt.Sprintf("[%s (%s)] TLS with encryption none or false is excluded", name, address)
 	}
-	// VLESS without TLS is excluded — VLESS always uses protocol encryption
-	// "none", so an empty TLS field means there is no transport security.
+	// VLESS without TLS is prohibited for public addresses — VLESS always
+	// uses protocol encryption "none", so xray-core requires transport
+	// security (TLS/Reality) when the server address is a public IP.
 	if strings.EqualFold(v.Protocol, "vless") && (v.TLS == "" || strings.EqualFold(v.TLS, "none")) {
-		return fmt.Sprintf("[%s (%s)] VLESS without TLS is excluded", name, address)
+		if !isPrivateAddress(v.Add) {
+			return fmt.Sprintf("[%s (%s)] VLESS without TLS is prohibited for public addresses", name, address)
+		}
 	}
 	// VMess without TLS but with encryption none or false is also excluded.
 	if strings.EqualFold(v.Protocol, "vmess") && (v.TLS == "" || strings.EqualFold(v.TLS, "none")) && isNoneOrFalse(v.Security) {
