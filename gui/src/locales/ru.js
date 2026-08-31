@@ -41,6 +41,7 @@ export default {
     name: "Название сервера",
     address: "Адрес сервера",
     protocol: "Протокол",
+    security: "Шифрование",
     latency: "Задержка",
     lastSeenTime: "Last seen time",
     lastTryTime: "Last try time",

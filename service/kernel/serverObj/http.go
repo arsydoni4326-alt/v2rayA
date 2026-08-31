@@ -113,6 +113,11 @@ func (h *HTTP) GetProtocol() string {
 	return h.Protocol
 }
 
+func (h *HTTP) GetSecurity() string {
+	// HTTP has no built-in encryption
+	return "none"
+}
+
 func (h *HTTP) GetHostname() string {
 	return h.Server
 }

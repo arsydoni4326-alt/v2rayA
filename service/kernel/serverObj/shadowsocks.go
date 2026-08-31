@@ -379,6 +379,11 @@ func (s *Shadowsocks) GetProtocol() string {
 	return s.Protocol
 }
 
+func (s *Shadowsocks) GetSecurity() string {
+	// Shadowsocks uses its cipher as security
+	return s.Cipher
+}
+
 func (s *Shadowsocks) ProtoToShow() string {
 	ciph := s.Cipher
 	if ciph == "chacha20-ietf-poly1305" || ciph == "chacha20-poly1305" {

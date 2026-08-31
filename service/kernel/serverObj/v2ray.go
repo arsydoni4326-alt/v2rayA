@@ -799,6 +799,13 @@ func (v *V2Ray) GetProtocol() string {
 	return v.Protocol
 }
 
+func (v *V2Ray) GetSecurity() string {
+	if v.TLS != "" && v.TLS != "none" {
+		return v.TLS
+	}
+	return "none"
+}
+
 func (v *V2Ray) GetHostname() string {
 	return v.Add
 }

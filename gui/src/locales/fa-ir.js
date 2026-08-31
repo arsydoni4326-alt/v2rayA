@@ -41,6 +41,7 @@ export default {
     name: "نام سرور",
     address: "آدرس سرور",
     protocol: "پروتکل",
+    security: "رمزنگاری",
     latency: "تاخیر",
     lastSeenTime: "آخرین بار مراجعه",
     lastTryTime: "آخرین زمان تست کردن",

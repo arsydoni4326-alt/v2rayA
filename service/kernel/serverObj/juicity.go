@@ -120,6 +120,11 @@ func (s *Juicity) GetProtocol() string {
 	return s.Protocol
 }
 
+func (s *Juicity) GetSecurity() string {
+	// Juicity uses QUIC with built-in encryption
+	return "quic"
+}
+
 func (s *Juicity) GetHostname() string {
 	return s.Server
 }

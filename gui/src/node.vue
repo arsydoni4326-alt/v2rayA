@@ -162,7 +162,9 @@
               {{ $t("operations.downloadTxt") }}
             </b-dropdown-item>
           </b-dropdown>
+          <!-- Bulk Add: only on SERVER tab (1) and individual subscription tabs (2+) -->
           <b-button
+            v-if="tab >= 1"
             class="field mobile-small"
             type="is-success"
             @click="handleClickBulkAddByLatency"
@@ -487,16 +489,55 @@
               : ''
           }`"
         >
-          <b-field
-            v-if="tab === subi + 2"
-            :label="`${sub.host.toUpperCase()}(${sub.servers.length}${
-              sub.info ? ') (' : ''
-            }${sub.info})`"
-          >
+          <div v-if="tab === subi + 2">
+            <b-field
+              :label="`${sub.host.toUpperCase()}(${getFilteredServers(subi).length}/${sub.servers.length}${
+                sub.info ? ') (' : ''
+              }${sub.info})`"
+              grouped
+              group-multiline
+            >
+              <b-field label="Protocol" label-position="on-border" class="filter-field">
+                <b-select
+                  :value="getTabFilter(subi).protocol || ''"
+                  @input="setTabFilter(subi, 'protocol', $event || undefined)"
+                  placeholder="All"
+                  size="is-small"
+                  expanded
+                >
+                  <option value="">All</option>
+                  <option
+                    v-for="proto in getAvailableProtocols(subi)"
+                    :key="proto"
+                    :value="proto"
+                  >
+                    {{ proto }}
+                  </option>
+                </b-select>
+              </b-field>
+              <b-field label="Security" label-position="on-border" class="filter-field">
+                <b-select
+                  :value="getTabFilter(subi).security || ''"
+                  @input="setTabFilter(subi, 'security', $event || undefined)"
+                  placeholder="All"
+                  size="is-small"
+                  expanded
+                >
+                  <option value="">All</option>
+                  <option
+                    v-for="sec in getAvailableSecurityTypes(subi)"
+                    :key="sec"
+                    :value="sec"
+                  >
+                    {{ sec }}
+                  </option>
+                </b-select>
+              </b-field>
+            </b-field>
             <b-table
               :current-page.sync="currentPage[sub.id]"
               per-page="100"
-              :data="sub.servers"
+              :data="getFilteredServers(subi)"
               :checked-rows.sync="checkedRows"
               checkable
               default-sort="id"
@@ -637,7 +678,7 @@
                 </div>
               </b-table-column>
             </b-table>
-          </b-field>
+          </div>
         </b-tab-item>
         <b-tab-item label="LIVE FLOW">
           <LiveFlowDashboard />
@@ -875,11 +916,50 @@ export default {
       coreVersionValid: true,
       coreVersionErr: "",
       _suppressCheckedRowsWatcher: false,
+      // Per-tab filters for protocol and security
+      tabFilters: {},
     };
   },
   computed: {
     loadBalanceValid() {
       return localStorage["loadBalanceValid"] === "true";
+    },
+    // Get unique protocols for the current tab
+    availableProtocols() {
+      const servers = this.getServersForCurrentTab();
+      if (!servers || !servers.length) return [];
+      const protocols = new Set();
+      servers.forEach((s) => {
+        if (s.net) protocols.add(s.net);
+      });
+      return [...protocols].sort();
+    },
+    // Get unique security types for the current tab
+    availableSecurityTypes() {
+      const servers = this.getServersForCurrentTab();
+      if (!servers || !servers.length) return [];
+      const securityTypes = new Set();
+      servers.forEach((s) => {
+        if (s.security) securityTypes.add(s.security);
+      });
+      return [...securityTypes].sort();
+    },
+    // Get filtered servers for the current tab
+    filteredServersForCurrentTab() {
+      const servers = this.getServersForCurrentTab();
+      if (!servers) return [];
+      const filters = this.tabFilters[this.currentTabKey] || {};
+      return servers.filter((s) => {
+        if (filters.protocol && s.net !== filters.protocol) return false;
+        if (filters.security && s.security !== filters.security) return false;
+        return true;
+      });
+    },
+    // Current tab key for filter storage
+    currentTabKey() {
+      if (this.tab === 0) return "subscriptions";
+      if (this.tab === 1) return "servers";
+      return `subscription_${this.tab - 2}`;
     },
   },
   watch: {
@@ -1017,6 +1097,63 @@ export default {
   methods: {
     getRowClass(row) {
       return row.disableReason ? "is-disabled-row" : "";
+    },
+    // Get servers for the current tab (SERVER tab or individual subscription tabs)
+    getServersForCurrentTab() {
+      if (this.tab === 1) {
+        // SERVER tab
+        return this.tableData.servers;
+      } else if (this.tab >= 2) {
+        // Individual subscription tab
+        const subIndex = this.tab - 2;
+        const sub = this.tableData.subscriptions[subIndex];
+        return sub ? sub.servers : [];
+      }
+      return [];
+    },
+    // Get tab filter for a specific subscription
+    getTabFilter(subIndex) {
+      const key = `subscription_${subIndex}`;
+      return this.tabFilters[key] || {};
+    },
+    // Set tab filter for a specific subscription
+    setTabFilter(subIndex, field, value) {
+      const key = `subscription_${subIndex}`;
+      if (!this.tabFilters[key]) {
+        this.$set(this.tabFilters, key, {});
+      }
+      this.$set(this.tabFilters[key], field, value);
+    },
+    // Get filtered servers for a specific subscription tab
+    getFilteredServers(subIndex) {
+      const sub = this.tableData.subscriptions[subIndex];
+      if (!sub || !sub.servers) return [];
+      const filters = this.getTabFilter(subIndex);
+      return sub.servers.filter((s) => {
+        if (filters.protocol && s.net !== filters.protocol) return false;
+        if (filters.security && s.security !== filters.security) return false;
+        return true;
+      });
+    },
+    // Get available protocols for a specific subscription tab
+    getAvailableProtocols(subIndex) {
+      const sub = this.tableData.subscriptions[subIndex];
+      if (!sub || !sub.servers) return [];
+      const protocols = new Set();
+      sub.servers.forEach((s) => {
+        if (s.net) protocols.add(s.net);
+      });
+      return [...protocols].sort();
+    },
+    // Get available security types for a specific subscription tab
+    getAvailableSecurityTypes(subIndex) {
+      const sub = this.tableData.subscriptions[subIndex];
+      if (!sub || !sub.servers) return [];
+      const securityTypes = new Set();
+      sub.servers.forEach((s) => {
+        if (s.security) securityTypes.add(s.security);
+      });
+      return [...securityTypes].sort();
     },
     getRunningLabel(running, networkPaused = false) {
       if (networkPaused) {
@@ -2088,6 +2225,16 @@ td {
 .disable-reason-icon {
   margin-left: 4px;
   vertical-align: middle;
+}
+
+.filter-field {
+  margin-bottom: 0.5rem !important;
+  margin-right: 1rem;
+
+  .select select {
+    min-width: 120px;
+    font-size: 0.85em;
+  }
 }
 </style>
 

@@ -41,6 +41,7 @@ export default {
     name: "Nome do Servidor",
     address: "Endereço do Servidor",
     protocol: "Protocolo",
+    security: "Criptografia",
     latency: "Latência",
     lastSeenTime: "Última vez visto",
     lastTryTime: "Última tentativa",

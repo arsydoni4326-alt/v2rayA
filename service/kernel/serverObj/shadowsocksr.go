@@ -155,6 +155,11 @@ func (s *ShadowsocksR) GetProtocol() string {
 	return s.Protocol
 }
 
+func (s *ShadowsocksR) GetSecurity() string {
+	// SSR uses cipher + obfs as security
+	return s.Proto + "+" + s.Obfs
+}
+
 func (s *ShadowsocksR) GetHostname() string {
 	return s.Server
 }

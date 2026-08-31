@@ -43,6 +43,7 @@ export default {
     name: "Server Name",
     address: "Server Address",
     protocol: "Protocol",
+    security: "Security",
     latency: "Latency",
     lastSeenTime: "Last seen time",
     lastTryTime: "Last try time",

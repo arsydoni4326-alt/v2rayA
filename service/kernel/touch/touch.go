@@ -25,6 +25,7 @@ type Server struct {
 	Name         string              `json:"name"`
 	Address      string              `json:"address"`
 	Net          string              `json:"net"`
+	Security     string              `json:"security"`
 	PingLatency  string              `json:"pingLatency"`
 	DisableReason string             `json:"disableReason,omitempty"`
 }
@@ -66,6 +67,7 @@ func serverRawsToServers(rss []configure.ServerRaw) (ts []Server) {
 			Name:        v.ServerObj.GetName(),
 			Address:     address,
 			Net:         v.ServerObj.ProtoToShow(),
+			Security:    v.ServerObj.GetSecurity(),
 			PingLatency: v.Latency,
 		}
 		if d, ok := v.ServerObj.(disablable); ok {
