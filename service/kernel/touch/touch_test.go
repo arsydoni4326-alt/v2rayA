@@ -40,7 +40,7 @@ func TestServerRawsToServersIncludesFilterAndDisableMetadata(t *testing.T) {
 	if got, want := servers[0].Encryptions, []string{"tls", "aes-128-gcm"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("encryptions = %v, want %v", got, want)
 	}
-	if servers[1].DisableReason == "" {
-		t.Fatal("TLS VLESS server with protocol encryption none has no disable reason")
+	if servers[1].DisableReason != "" {
+		t.Fatalf("TLS VLESS server should not be disabled, got disable reason: %q", servers[1].DisableReason)
 	}
 }
