@@ -45,6 +45,7 @@ Vue.js-based single-page application:
 - **State Management:** Vuex store
 - **HTTP Client:** Axios with request caching
 - **Internationalization:** Multi-language support via `locales/`
+- **Server filtering and eligibility:** `/api/touch` supplies canonical server `protocol`, `encryptions`, and optional `disableReason` metadata. `node.vue` derives dynamic options for local and per-subscription server tables in independent filter containers, retaining filter state locally per tab. TLS-enabled VMess/VLESS entries with `none` or `false` encryption remain visible but cannot be selected or connected.
 
 **Entry Point:** `gui/src/main.js`
 
@@ -53,7 +54,7 @@ Vue.js-based single-page application:
 The experimental Live Flow feature is a Vue-native SVG topology that renders observed routes as source → selected proxy/chain → destination. It does not use React Flow because the GUI is Vue 2.
 
 1. The bundled `v2raya_core` emits an opt-in structured event after Xray selects an outbound for an accepted access request.
-2. The service consumes only the dedicated private stdout prefix, validates source/destination/detour fields, resolves selected server metadata from connected-server configuration, and publishes `flow_*` events to `ApiFeed` product `live_flow`.
+2. The service consumes only the dedicated private stdout prefix, validates source/destination/detour fields, excludes the internal `gstatic.com:443` HTTP latency probe, resolves selected server metadata from connected-server configuration, and publishes `flow_*` events to `ApiFeed` product `live_flow`.
 3. `/api/live-flow` bridges that product to JWT-authenticated WebSocket clients.
 4. The Vuex-backed dashboard renders shared SVG source, proxy, and destination nodes with animated directed paths.
 
