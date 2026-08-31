@@ -64,6 +64,7 @@ export default {
     matchingServers() {
       if (!this.touchData) return [];
       return this.getAllServers().filter((s) => {
+        if (s.disableReason) return false;
         if (!s.pingLatency || !s.pingLatency.endsWith("ms")) return false;
         return !isNaN(parseInt(s.pingLatency, 10)) && parseInt(s.pingLatency, 10) <= this.maxLatency;
       });

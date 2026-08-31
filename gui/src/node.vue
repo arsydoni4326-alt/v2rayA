@@ -163,6 +163,7 @@
             </b-dropdown-item>
           </b-dropdown>
           <b-button
+            v-if="isBulkAddByLatencyAvailable"
             class="field mobile-small"
             type="is-success"
             @click="handleClickBulkAddByLatency"
@@ -381,62 +382,64 @@
                 {{ getFilteredLocalServers().length }}/{{ tableData.servers.length }}
               </b-tag>
             </header>
-            <div class="table-filter-toolbar">
-              <div class="table-filter-toolbar__label">
-                <b-icon icon="filter-variant" size="is-small" />
-                <span>{{ $t("table.filters") }}</span>
-              </div>
-              <div class="table-filter-toolbar__controls">
-                <b-field
-                  :label="$t('server.protocol')"
-                  label-position="on-border"
-                  :class="{ 'table-filter-control--active': localServerFilters.protocol }"
-                >
-                  <b-select
-                    :value="localServerFilters.protocol"
-                    expanded
-                    @input="setLocalServerFilter('protocol', $event)"
+            <div class="table-filter-container">
+              <div class="table-filter-toolbar">
+                <div class="table-filter-toolbar__label">
+                  <b-icon icon="filter-variant" size="is-small" />
+                  <span>{{ $t("table.filters") }}</span>
+                </div>
+                <div class="table-filter-toolbar__controls">
+                  <b-field
+                    :label="$t('server.protocol')"
+                    label-position="on-border"
+                    :class="{ 'table-filter-control--active': localServerFilters.protocol }"
                   >
-                    <option value="">{{ $t("common.all") }}</option>
-                    <option
-                      v-for="protocol in getServerProtocols(tableData.servers)"
-                      :key="protocol"
-                      :value="protocol"
+                    <b-select
+                      :value="localServerFilters.protocol"
+                      expanded
+                      @input="setLocalServerFilter('protocol', $event)"
                     >
-                      {{ protocol }}
-                    </option>
-                  </b-select>
-                </b-field>
-                <b-field
-                  :label="$t('server.encryption')"
-                  label-position="on-border"
-                  :class="{ 'table-filter-control--active': localServerFilters.encryption }"
-                >
-                  <b-select
-                    :value="localServerFilters.encryption"
-                    expanded
-                    @input="setLocalServerFilter('encryption', $event)"
+                      <option value="">{{ $t("common.all") }}</option>
+                      <option
+                        v-for="protocol in getServerProtocols(tableData.servers)"
+                        :key="protocol"
+                        :value="protocol"
+                      >
+                        {{ protocol }}
+                      </option>
+                    </b-select>
+                  </b-field>
+                  <b-field
+                    :label="$t('server.encryption')"
+                    label-position="on-border"
+                    :class="{ 'table-filter-control--active': localServerFilters.encryption }"
                   >
-                    <option value="">{{ $t("common.all") }}</option>
-                    <option
-                      v-for="encryption in getServerEncryptionsForServers(tableData.servers)"
-                      :key="encryption"
-                      :value="encryption"
+                    <b-select
+                      :value="localServerFilters.encryption"
+                      expanded
+                      @input="setLocalServerFilter('encryption', $event)"
                     >
-                      {{ encryption }}
-                    </option>
-                  </b-select>
-                </b-field>
-                <b-button
-                  v-if="hasActiveFilters(localServerFilters)"
-                  class="table-filter-toolbar__clear"
-                  type="is-light"
-                  size="is-small"
-                  icon-left="close"
-                  @click="clearLocalServerFilters"
-                >
-                  {{ $t("table.clearFilters") }}
-                </b-button>
+                      <option value="">{{ $t("common.all") }}</option>
+                      <option
+                        v-for="encryption in getServerEncryptionsForServers(tableData.servers)"
+                        :key="encryption"
+                        :value="encryption"
+                      >
+                        {{ encryption }}
+                      </option>
+                    </b-select>
+                  </b-field>
+                  <b-button
+                    v-if="hasActiveFilters(localServerFilters)"
+                    class="table-filter-toolbar__clear"
+                    type="is-light"
+                    size="is-small"
+                    icon-left="close"
+                    @click="clearLocalServerFilters"
+                  >
+                    {{ $t("table.clearFilters") }}
+                  </b-button>
+                </div>
               </div>
             </div>
             <div class="table-panel__content">
@@ -525,6 +528,7 @@
                   <b-dropdown
                     v-if="loadBalanceValid"
                     position="is-bottom-left"
+                    :disabled="Boolean(props.row.disableReason) && !props.row.connected"
                   >
                     <b-button
                       slot="trigger"
@@ -557,6 +561,7 @@
                     }`"
                     :outlined="!props.row.connected"
                     :type="props.row.connected ? 'is-warning' : 'is-primary'"
+                    :disabled="Boolean(props.row.disableReason) && !props.row.connected"
                     @click="handleClickAboutConnection(props.row)"
                   >
                     {{
@@ -636,66 +641,68 @@
                   {{ getFilteredSubscriptionServers(sub).length }}/{{ sub.servers.length }}
                 </b-tag>
               </header>
-              <div class="table-filter-toolbar">
-                <div class="table-filter-toolbar__label">
-                  <b-icon icon="filter-variant" size="is-small" />
-                  <span>{{ $t("table.filters") }}</span>
-                </div>
-                <div class="table-filter-toolbar__controls">
-                  <b-field
-                    :label="$t('server.protocol')"
-                    label-position="on-border"
-                    :class="{
-                      'table-filter-control--active': getSubscriptionFilter(sub).protocol,
-                    }"
-                  >
-                    <b-select
-                      :value="getSubscriptionFilter(sub).protocol"
-                      expanded
-                      @input="setSubscriptionFilter(sub, 'protocol', $event)"
+              <div class="table-filter-container">
+                <div class="table-filter-toolbar">
+                  <div class="table-filter-toolbar__label">
+                    <b-icon icon="filter-variant" size="is-small" />
+                    <span>{{ $t("table.filters") }}</span>
+                  </div>
+                  <div class="table-filter-toolbar__controls">
+                    <b-field
+                      :label="$t('server.protocol')"
+                      label-position="on-border"
+                      :class="{
+                        'table-filter-control--active': getSubscriptionFilter(sub).protocol,
+                      }"
                     >
-                      <option value="">{{ $t("common.all") }}</option>
-                      <option
-                        v-for="protocol in getServerProtocols(sub.servers)"
-                        :key="protocol"
-                        :value="protocol"
+                      <b-select
+                        :value="getSubscriptionFilter(sub).protocol"
+                        expanded
+                        @input="setSubscriptionFilter(sub, 'protocol', $event)"
                       >
-                        {{ protocol }}
-                      </option>
-                    </b-select>
-                  </b-field>
-                  <b-field
-                    :label="$t('server.encryption')"
-                    label-position="on-border"
-                    :class="{
-                      'table-filter-control--active': getSubscriptionFilter(sub).encryption,
-                    }"
-                  >
-                    <b-select
-                      :value="getSubscriptionFilter(sub).encryption"
-                      expanded
-                      @input="setSubscriptionFilter(sub, 'encryption', $event)"
+                        <option value="">{{ $t("common.all") }}</option>
+                        <option
+                          v-for="protocol in getServerProtocols(sub.servers)"
+                          :key="protocol"
+                          :value="protocol"
+                        >
+                          {{ protocol }}
+                        </option>
+                      </b-select>
+                    </b-field>
+                    <b-field
+                      :label="$t('server.encryption')"
+                      label-position="on-border"
+                      :class="{
+                        'table-filter-control--active': getSubscriptionFilter(sub).encryption,
+                      }"
                     >
-                      <option value="">{{ $t("common.all") }}</option>
-                      <option
-                        v-for="encryption in getServerEncryptionsForServers(sub.servers)"
-                        :key="encryption"
-                        :value="encryption"
+                      <b-select
+                        :value="getSubscriptionFilter(sub).encryption"
+                        expanded
+                        @input="setSubscriptionFilter(sub, 'encryption', $event)"
                       >
-                        {{ encryption }}
-                      </option>
-                    </b-select>
-                  </b-field>
-                  <b-button
-                    v-if="hasActiveFilters(getSubscriptionFilter(sub))"
-                    class="table-filter-toolbar__clear"
-                    type="is-light"
-                    size="is-small"
-                    icon-left="close"
-                    @click="clearSubscriptionFilters(sub)"
-                  >
-                    {{ $t("table.clearFilters") }}
-                  </b-button>
+                        <option value="">{{ $t("common.all") }}</option>
+                        <option
+                          v-for="encryption in getServerEncryptionsForServers(sub.servers)"
+                          :key="encryption"
+                          :value="encryption"
+                        >
+                          {{ encryption }}
+                        </option>
+                      </b-select>
+                    </b-field>
+                    <b-button
+                      v-if="hasActiveFilters(getSubscriptionFilter(sub))"
+                      class="table-filter-toolbar__clear"
+                      type="is-light"
+                      size="is-small"
+                      icon-left="close"
+                      @click="clearSubscriptionFilters(sub)"
+                    >
+                      {{ $t("table.clearFilters") }}
+                    </b-button>
+                  </div>
                 </div>
               </div>
               <div class="table-panel__content">
@@ -785,6 +792,7 @@
                   <b-dropdown
                     v-if="loadBalanceValid"
                     position="is-bottom-left"
+                    :disabled="Boolean(props.row.disableReason) && !props.row.connected"
                   >
                     <b-button
                       slot="trigger"
@@ -817,6 +825,7 @@
                     }`"
                     :outlined="!props.row.connected"
                     :type="props.row.connected ? 'is-warning' : 'is-primary'"
+                    :disabled="Boolean(props.row.disableReason) && !props.row.connected"
                     @click="handleClickAboutConnection(props.row, subi)"
                   >
                     {{
@@ -1114,6 +1123,10 @@ export default {
   computed: {
     loadBalanceValid() {
       return localStorage["loadBalanceValid"] === "true";
+    },
+    isBulkAddByLatencyAvailable() {
+      return this.tab === 1 ||
+        (this.tab >= 2 && this.tab < this.tableData.subscriptions.length + 2);
     },
   },
   watch: {
@@ -1829,6 +1842,9 @@ export default {
       });
     },
     handleClickAboutConnection(row, sub) {
+      if (!row.connected && row.disableReason) {
+        return;
+      }
       if (!row.connected && this.loadBalanceValid) {
         this.openPickProxyGroup(row, sub);
         return;
@@ -1929,6 +1945,9 @@ export default {
       });
     },
     connectToProxyGroup(row, sub, outbound) {
+      if (row.disableReason) {
+        return;
+      }
       let cancel;
       let loading = this.$buefy.loading.open();
       waitingConnected(
@@ -1980,6 +1999,9 @@ export default {
       );
     },
     toggleNodeInGroup(row, sub, group) {
+      if (row.disableReason && !this.isNodeInOutbound(row, sub, group)) {
+        return;
+      }
       const targetType = row._type;
       const targetSub = targetType === "subscriptionServer" ? sub : 0;
       const targetId = row.id;
@@ -2113,6 +2135,9 @@ export default {
         });
     },
     handleClickBulkAddByLatency() {
+      if (!this.isBulkAddByLatencyAvailable) {
+        return;
+      }
       this.$buefy.modal.open({
         parent: this,
         component: modalBulkAddByLatency,
@@ -2537,14 +2562,21 @@ body.theme-dark .node-group-option--active {
   font-weight: 700;
 }
 
+.table-filter-container {
+  padding: 0.8rem 0.75rem 0;
+  background: #fff;
+}
+
 .table-filter-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.85rem 1.25rem 0.25rem;
-  border-bottom: 1px solid #eef0f4;
+  padding: 0.85rem 1rem 0.25rem;
+  border: 1px solid #e1e7f0;
+  border-radius: 10px;
   background: #fbfcfe;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.04);
 }
 
 .table-filter-toolbar__label {
@@ -2597,7 +2629,7 @@ body.theme-dark .node-group-option--active {
 }
 
 .table-panel__content {
-  padding: 0.3rem 0.75rem 0.75rem;
+  padding: 0.75rem;
 }
 
 .node-table .table-wrapper {
@@ -2700,7 +2732,11 @@ body.theme-dark .node-group-option--active {
 
   .table-filter-toolbar {
     gap: 0.65rem;
-    padding: 0.75rem 1rem 0.15rem;
+    padding: 0.75rem 0.8rem 0.15rem;
+  }
+
+  .table-filter-container {
+    padding: 0.65rem 0.5rem 0;
   }
 
   .table-filter-toolbar__controls {

@@ -1,6 +1,9 @@
 package v2ray
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestParseLiveFlowEndpoint(t *testing.T) {
 	tests := []struct {
@@ -58,5 +61,50 @@ func TestConsumeCoreLiveFlowEvent(t *testing.T) {
 	}
 	if ConsumeCoreLiveFlowEvent("ordinary core log") {
 		t.Fatal("ordinary core log was consumed")
+	}
+}
+
+func TestRecordCoreAccessExcludesGstaticProbe(t *testing.T) {
+	feed := NewSubscriptions(2)
+	feed.RegisterProduct(LiveFlowProduct)
+	producer := &LiveFlowProducer{
+		feed:     feed,
+		sessions: make(map[string]*LiveFlowSession),
+		done:     make(chan struct{}),
+	}
+	defer producer.Stop()
+
+	box := feed.SubscribeMessage(LiveFlowProduct)
+	defer box.Cancel()
+
+	producer.RecordCoreAccess(CoreLiveFlowEvent{
+		Source:      "tcp:192.0.2.1:1111",
+		Destination: "tcp:gstatic.com:443",
+		Detour:      "direct",
+		Timestamp:   time.Now().UnixMilli(),
+	})
+	if sessions := producer.Snapshot(); len(sessions) != 0 {
+		t.Fatalf("probe created %d Live Flow session(s), want 0", len(sessions))
+	}
+	select {
+	case message := <-box.Messages:
+		t.Fatalf("probe published Live Flow event %#v", message)
+	default:
+	}
+
+	producer.RecordCoreAccess(CoreLiveFlowEvent{
+		Source:      "tcp:192.0.2.1:1111",
+		Destination: "tcp:gstatic.com:80",
+		Detour:      "direct",
+		Timestamp:   time.Now().UnixMilli(),
+	})
+	select {
+	case message := <-box.Messages:
+		event, ok := message.Body.(LiveFlowEvent)
+		if !ok || event.Type != "flow_start" {
+			t.Fatalf("normal route message = %#v, want flow_start", message)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("normal route did not publish a Live Flow event")
 	}
 }

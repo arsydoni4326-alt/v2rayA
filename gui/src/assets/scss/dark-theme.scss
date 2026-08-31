@@ -467,9 +467,14 @@ body.theme-dark {
     }
   }
 
+  .table-filter-container {
+    background-color: var(--md-surface-container);
+  }
+
   .table-filter-toolbar {
-    border-bottom-color: var(--md-surface-variant);
+    border-color: var(--md-surface-variant);
     background-color: #242229;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
   }
 
   .table-filter-toolbar__label,
