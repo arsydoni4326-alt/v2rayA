@@ -72,6 +72,36 @@ func TestV2RayDisableReasonForTLSEncryptionNoneOrFalse(t *testing.T) {
 		{
 			name:     "VMess without TLS encryption none",
 			server:   &V2Ray{Protocol: "vmess", TLS: "none", Security: "none"},
+			disabled: true,
+		},
+		{
+			name:     "VLESS empty TLS",
+			server:   &V2Ray{Protocol: "vless", TLS: ""},
+			disabled: true,
+		},
+		{
+			name:     "VMess empty TLS empty Security defaults to auto",
+			server:   &V2Ray{Protocol: "vmess", TLS: "", Security: ""},
+			disabled: false,
+		},
+		{
+			name:     "VLESS empty TLS private address",
+			server:   &V2Ray{Protocol: "vless", TLS: "", Add: "192.168.1.1:443"},
+			disabled: true,
+		},
+		{
+			name:     "VLESS Reality",
+			server:   &V2Ray{Protocol: "vless", TLS: "reality", PublicKey: "abc123"},
+			disabled: false,
+		},
+		{
+			name:     "VMess without TLS with real encryption",
+			server:   &V2Ray{Protocol: "vmess", TLS: "", Security: "aes-128-gcm"},
+			disabled: false,
+		},
+		{
+			name:     "VMess TLS none with cipher",
+			server:   &V2Ray{Protocol: "vmess", TLS: "none", Security: "aes-128-gcm"},
 			disabled: false,
 		},
 	}
@@ -82,8 +112,8 @@ func TestV2RayDisableReasonForTLSEncryptionNoneOrFalse(t *testing.T) {
 			if got := reason != ""; got != tt.disabled {
 				t.Fatalf("DisableReason() = %q, disabled = %v, want disabled = %v", reason, got, tt.disabled)
 			}
-			if tt.disabled && !strings.Contains(reason, "TLS with encryption none or false") {
-				t.Fatalf("DisableReason() = %q, want TLS encryption exclusion reason", reason)
+			if tt.disabled && !strings.Contains(reason, "is excluded") && !strings.Contains(reason, "is not supported") {
+				t.Fatalf("DisableReason() = %q, want an exclusion reason", reason)
 			}
 		})
 	}

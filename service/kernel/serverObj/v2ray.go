@@ -827,6 +827,10 @@ func isPrivateAddress(addr string) bool {
 
 func isTLSEnabled(tls string) bool {
 	tls = strings.TrimSpace(tls)
+	// "reality" is a connection obfuscation layer, not traditional TLS encryption.
+	if strings.EqualFold(tls, "reality") {
+		return false
+	}
 	return tls != "" && !strings.EqualFold(tls, "none") && !strings.EqualFold(tls, "false")
 }
 
@@ -859,11 +863,14 @@ func (v *V2Ray) DisableReason(name, address string) string {
 		(strings.EqualFold(v.Protocol, "vless") || isNoneOrFalse(v.Security)) {
 		return fmt.Sprintf("[%s (%s)] TLS with encryption none or false is excluded", name, address)
 	}
-	// VLESS without TLS or other encryption is prohibited for public addresses
-	if v.Protocol == "vless" && (v.TLS == "" || v.TLS == "none") {
-		if !isPrivateAddress(v.Add) {
-			return fmt.Sprintf("[%s (%s)] VLESS without TLS is prohibited for public addresses", name, address)
-		}
+	// VLESS without TLS is excluded — VLESS always uses protocol encryption
+	// "none", so an empty TLS field means there is no transport security.
+	if strings.EqualFold(v.Protocol, "vless") && (v.TLS == "" || strings.EqualFold(v.TLS, "none")) {
+		return fmt.Sprintf("[%s (%s)] VLESS without TLS is excluded", name, address)
+	}
+	// VMess without TLS but with encryption none or false is also excluded.
+	if strings.EqualFold(v.Protocol, "vmess") && (v.TLS == "" || strings.EqualFold(v.TLS, "none")) && isNoneOrFalse(v.Security) {
+		return fmt.Sprintf("[%s (%s)] VMess without TLS and encryption none or false is excluded", name, address)
 	}
 	return ""
 }
