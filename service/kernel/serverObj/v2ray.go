@@ -828,24 +828,24 @@ func isPrivateAddress(addr string) bool {
 // DisableReason returns a non-empty string when this V2Ray server
 // configuration is known to be incompatible with the bundled xray-core,
 // explaining why the server should be disabled in the UI.
-func (v *V2Ray) DisableReason() string {
+func (v *V2Ray) DisableReason(name, address string) string {
 	// Reality with empty pbk — broken config, will always fail
 	if v.TLS == "reality" && v.PublicKey == "" {
-		return "Reality requires a public key (pbk)"
+		return fmt.Sprintf("[%s (%s)] Reality requires a public key (pbk)", name, address)
 	}
 	// Reality with ML-DSA / post-quantum ("blake") — ML-DSA public keys
 	// are ~1952 bytes (base64 ≈2604 chars) vs X25519's 32 bytes (≈44 chars).
 	if v.TLS == "reality" && len(v.PublicKey) > 100 {
-		return "Reality with ML-DSA (post-quantum) is not supported"
+		return fmt.Sprintf("[%s (%s)] Reality with ML-DSA (post-quantum) is not supported", name, address)
 	}
 	// XHTTP transport — not supported by the bundled core
 	if v.Net == "xhttp" {
-		return "XHTTP transport is not supported by this core"
+		return fmt.Sprintf("[%s (%s)] XHTTP transport is not supported by this core", name, address)
 	}
 	// VLESS without TLS or other encryption is prohibited for public addresses
 	if v.Protocol == "vless" && (v.TLS == "" || v.TLS == "none") {
 		if !isPrivateAddress(v.Add) {
-			return "VLESS without TLS is prohibited for public addresses"
+			return fmt.Sprintf("[%s (%s)] VLESS without TLS is prohibited for public addresses", name, address)
 		}
 	}
 	return ""
