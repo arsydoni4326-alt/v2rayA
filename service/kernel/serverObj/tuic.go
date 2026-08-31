@@ -172,6 +172,11 @@ func (s *Tuic) GetProtocol() string {
 	return s.Protocol
 }
 
+func (s *Tuic) GetSecurity() string {
+	// TUIC uses QUIC with built-in encryption
+	return "quic"
+}
+
 func (s *Tuic) GetHostname() string {
 	return s.Server
 }

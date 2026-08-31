@@ -220,6 +220,14 @@ func (t *Trojan) GetProtocol() string {
 	return t.Protocol
 }
 
+func (t *Trojan) GetSecurity() string {
+	// Trojan always uses TLS by default
+	if t.Encryption != "" {
+		return "tls+" + strings.Split(t.Encryption, ";")[0]
+	}
+	return "tls"
+}
+
 func (t *Trojan) GetHostname() string {
 	return t.Server
 }

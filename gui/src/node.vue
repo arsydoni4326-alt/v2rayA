@@ -162,6 +162,7 @@
               {{ $t("operations.downloadTxt") }}
             </b-dropdown-item>
           </b-dropdown>
+          <!-- Bulk Add: only on SERVER tab (1) and individual subscription tabs (2+) -->
           <b-button
             v-if="isBulkAddByLatencyAvailable"
             class="field mobile-small"
@@ -2426,6 +2427,16 @@ td {
 .disable-reason-icon {
   margin-left: 4px;
   vertical-align: middle;
+}
+
+.filter-field {
+  margin-bottom: 0.5rem !important;
+  margin-right: 1rem;
+
+  .select select {
+    min-width: 120px;
+    font-size: 0.85em;
+  }
 }
 </style>
 

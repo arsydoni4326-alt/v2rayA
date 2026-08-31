@@ -18,6 +18,7 @@ type ServerObj interface {
 	NeedPluginPort() bool
 	ProtoToShow() string
 	GetProtocol() string
+	GetSecurity() string
 	GetHostname() string
 	GetPort() int
 	GetName() string

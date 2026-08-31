@@ -170,6 +170,7 @@ func (s *WireGuard) ExportToURL() string {
 func (s *WireGuard) NeedPluginPort() bool { return false }
 func (s *WireGuard) ProtoToShow() string  { return "WireGuard" }
 func (s *WireGuard) GetProtocol() string  { return s.Protocol }
+func (s *WireGuard) GetSecurity() string  { return "wireguard" }
 func (s *WireGuard) GetHostname() string  { return s.Server }
 func (s *WireGuard) GetPort() int         { return s.Port }
 func (s *WireGuard) GetName() string      { return s.Name }

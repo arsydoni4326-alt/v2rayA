@@ -107,6 +107,11 @@ func (v *Plugin) GetProtocol() string {
 	return v.ProtocolToShow
 }
 
+func (v *Plugin) GetSecurity() string {
+	// Plugin security depends on the underlying protocol
+	return "none"
+}
+
 func (v *Plugin) GetHostname() string {
 	return v.Host
 }

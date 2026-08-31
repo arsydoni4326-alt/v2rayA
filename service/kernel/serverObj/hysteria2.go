@@ -184,6 +184,11 @@ func (s *Hysteria2) GetProtocol() string {
 	return s.Protocol
 }
 
+func (s *Hysteria2) GetSecurity() string {
+	// Hysteria2 uses QUIC with built-in encryption
+	return "quic"
+}
+
 func (s *Hysteria2) GetHostname() string {
 	return s.Server
 }
