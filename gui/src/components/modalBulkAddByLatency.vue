@@ -50,6 +50,10 @@ import axios from "../plugins/axios";
 const apiRoot = process.env.VUE_APP_API_ROOT || "/api";
 export default {
   name: "ModalBulkAddByLatency",
+  props: {
+    tabType: { type: String, default: "all" },
+    tabIndex: { type: Number, default: -1 },
+  },
   data() {
     return {
       maxLatency: 500, selectedOutbound: "proxy", outbounds: ["proxy"],
@@ -90,6 +94,14 @@ export default {
     },
     getAllServers() {
       if (!this.touchData) return [];
+      if (this.tabType === "server") {
+        return (this.touchData.servers || []).map((s) => ({ ...s, _type: "server" }));
+      }
+      if (this.tabType === "subscription" && this.tabIndex >= 0
+          && this.tabIndex < (this.touchData.subscriptions || []).length) {
+        const sub = this.touchData.subscriptions[this.tabIndex];
+        return (sub.servers || []).map((s) => ({ ...s, _type: "subscriptionServer", sub: this.tabIndex }));
+      }
       const servers = (this.touchData.servers || []).map((s) => ({ ...s, _type: "server" }));
       const subServers = [];
       (this.touchData.subscriptions || []).forEach((sub, subIdx) => {
@@ -129,6 +141,14 @@ export default {
       try {
         const existingTouches = this.currentConnectedServers
           .filter((w) => (w.outbound || "proxy") === this.selectedOutbound)
+          .filter((w) => {
+            if (this.tabType === "server") return (w._type || w.TYPE) === "server";
+            if (this.tabType === "subscription") {
+              return (w._type || w.TYPE) === "subscriptionServer"
+                && (w.sub != null ? w.sub : 0) === this.tabIndex;
+            }
+            return true;
+          })
           .map((w) => ({ id: w.id || w.ID, _type: w._type || w.TYPE,
             sub: (w._type || w.TYPE) === "subscriptionServer" ? (w.sub != null ? w.sub : 0) : 0,
             outbound: this.selectedOutbound }));
