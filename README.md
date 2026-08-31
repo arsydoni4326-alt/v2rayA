@@ -21,6 +21,7 @@ We are committed to providing the simplest operation and meeting most needs. Tha
 - **Web-based GUI:** Manage your proxy settings via any modern browser
 - **Cross-platform:** Runs on Linux, Windows, and macOS
 - **Automatic Updates:** Auto-update PAC files, GFW lists, and subscriptions
+- **Server filters:** Local-server and per-subscription protocol/encryption filters with dynamically derived options
 - **Routing rules:** Powerful routing capabilities based on RoutingA and V2Ray/XRay routing
 - **Containerized:** Official Docker images available
 - **Live Flow Topology:** Experimental SVG diagram of observed routes from source through the selected proxy to destination

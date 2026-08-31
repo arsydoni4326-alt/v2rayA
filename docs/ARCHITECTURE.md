@@ -45,6 +45,7 @@ Vue.js-based single-page application:
 - **State Management:** Vuex store
 - **HTTP Client:** Axios with request caching
 - **Internationalization:** Multi-language support via `locales/`
+- **Server filtering:** `/api/touch` supplies canonical server `protocol` and `encryptions` metadata; `node.vue` derives dynamic options for local and per-subscription server tables, retaining filter state locally per tab.
 
 **Entry Point:** `gui/src/main.js`
 

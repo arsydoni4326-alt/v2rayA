@@ -154,6 +154,8 @@ ip(geoip:private) -> direct
 - Protocol icons
 - Connection status markers
 - Context menu operations
+- The local-server table and individual subscription tabs provide independent protocol and encryption filters. Options are generated from the corresponding server list; applying both filters returns servers matching both values. Filter selections survive tab navigation for the active page session.
+- Node-management tables use responsive panel headers, count badges, filter toolbars, and empty-result states in both light and dark themes.
 
 ### 3. Settings Interface
 
@@ -208,6 +210,8 @@ Response:
 GET /api/touch
 Authorization: Bearer {token}
 ```
+
+Response server entries include canonical `protocol` and `encryptions` fields in addition to the display-oriented `net` field. `encryptions` is an array because a server may have both a protocol cipher and transport security (for example, VMess cipher plus TLS).
 
 Response:
 ```json
