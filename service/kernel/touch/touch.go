@@ -48,8 +48,9 @@ func NewUpdateStatus() SubscriptionStatus {
 
 // disablable is an optional interface that ServerObj implementations can
 // satisfy to indicate that the server should be disabled in the UI.
+// name and address are provided so the reason can identify the server.
 type disablable interface {
-	DisableReason() string
+	DisableReason(name, address string) string
 }
 
 func serverRawsToServers(rss []configure.ServerRaw) (ts []Server) {
@@ -69,7 +70,7 @@ func serverRawsToServers(rss []configure.ServerRaw) (ts []Server) {
 			PingLatency: v.Latency,
 		}
 		if d, ok := v.ServerObj.(disablable); ok {
-			s.DisableReason = d.DisableReason()
+			s.DisableReason = d.DisableReason(s.Name, s.Address)
 		}
 		ts[i] = s
 	}
