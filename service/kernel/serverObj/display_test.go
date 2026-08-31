@@ -76,7 +76,12 @@ func TestV2RayDisableReasonForTLSEncryptionNoneOrFalse(t *testing.T) {
 		},
 		{
 			name:     "VLESS empty TLS",
-			server:   &V2Ray{Protocol: "vless", TLS: ""},
+			server:   &V2Ray{Protocol: "vless", TLS: "", Add: "104.26.13.40:443"},
+			disabled: true,
+		},
+		{
+			name:     "VLESS empty TLS on domain",
+			server:   &V2Ray{Protocol: "vless", TLS: "", Add: "proxy.example.com:443"},
 			disabled: true,
 		},
 		{
@@ -87,7 +92,7 @@ func TestV2RayDisableReasonForTLSEncryptionNoneOrFalse(t *testing.T) {
 		{
 			name:     "VLESS empty TLS private address",
 			server:   &V2Ray{Protocol: "vless", TLS: "", Add: "192.168.1.1:443"},
-			disabled: false,
+			disabled: true,
 		},
 		{
 			name:     "VLESS Reality",
@@ -102,6 +107,38 @@ func TestV2RayDisableReasonForTLSEncryptionNoneOrFalse(t *testing.T) {
 		{
 			name:     "VMess TLS none with cipher",
 			server:   &V2Ray{Protocol: "vmess", TLS: "none", Security: "aes-128-gcm"},
+			disabled: false,
+		},
+		// security=false in VLESS URLs sets v.TLS to "false" — must be blocked
+		{
+			name:     "VLESS security=false on public IP",
+			server:   &V2Ray{Protocol: "vless", TLS: "false", Add: "104.26.13.40:8880"},
+			disabled: true,
+		},
+		{
+			name:     "VLESS security=false on private IP",
+			server:   &V2Ray{Protocol: "vless", TLS: "false", Add: "192.168.1.1:8880"},
+			disabled: true,
+		},
+		{
+			name:     "VLESS security=false on domain",
+			server:   &V2Ray{Protocol: "vless", TLS: "false", Add: "proxy.example.com:8880"},
+			disabled: true,
+		},
+		// security=none in VLESS URLs sets v.TLS to "none" — also blocked
+		{
+			name:     "VLESS security=none on domain",
+			server:   &V2Ray{Protocol: "vless", TLS: "none", Add: "itproxy4.lockdwn.com:443"},
+			disabled: true,
+		},
+		{
+			name:     "VMess security=false encryption none",
+			server:   &V2Ray{Protocol: "vmess", TLS: "false", Security: "none"},
+			disabled: true,
+		},
+		{
+			name:     "VMess security=false with real encryption",
+			server:   &V2Ray{Protocol: "vmess", TLS: "false", Security: "aes-128-gcm"},
 			disabled: false,
 		},
 	}
