@@ -62,7 +62,12 @@ func TestV2RayDisableReasonForTLSEncryptionNoneOrFalse(t *testing.T) {
 		{
 			name:     "VLESS TLS protocol encryption none",
 			server:   &V2Ray{Protocol: "vless", TLS: "tls"},
-			disabled: true,
+			disabled: false,
+		},
+		{
+			name:     "VLESS TLS WS on domain",
+			server:   &V2Ray{Protocol: "vless", TLS: "tls", Net: "ws", Add: "indo8.vpnjantit.com:10002"},
+			disabled: false,
 		},
 		{
 			name:     "VMess TLS encrypted",

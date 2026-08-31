@@ -863,12 +863,15 @@ func (v *V2Ray) DisableReason(name, address string) string {
 	if v.Net == "xhttp" {
 		return fmt.Sprintf("[%s (%s)] XHTTP transport is not supported by this core", name, address)
 	}
-	// A VLESS outbound always uses protocol encryption "none". For VMess, the
-	// subscription's scy field carries the configured encryption value.
-	if (strings.EqualFold(v.Protocol, "vmess") || strings.EqualFold(v.Protocol, "vless")) &&
+	// For VMess with TLS, the subscription's scy field carries the configured
+	// encryption value. VMess TLS + encryption none/false is excluded because
+	// it means VMess's own cipher is disabled. VLESS is NOT excluded here:
+	// VLESS always uses protocol encryption "none" by design, and TLS
+	// provides the actual transport encryption, making VLESS+TLS valid.
+	if strings.EqualFold(v.Protocol, "vmess") &&
 		isTLSEnabled(v.TLS) &&
-		(strings.EqualFold(v.Protocol, "vless") || isNoneOrFalse(v.Security)) {
-		return fmt.Sprintf("[%s (%s)] TLS with encryption none or false is excluded", name, address)
+		isNoneOrFalse(v.Security) {
+		return fmt.Sprintf("[%s (%s)] VMess TLS with encryption none or false is excluded", name, address)
 	}
 	// VLESS without TLS is always excluded — VLESS always uses protocol
 	// encryption "none", so without TLS the traffic is completely plaintext.
