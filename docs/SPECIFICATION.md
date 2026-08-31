@@ -156,6 +156,7 @@ ip(geoip:private) -> direct
 - Context menu operations
 - The local-server table and individual subscription tabs provide independent protocol and encryption filters in visually separate control containers. Options are generated from the corresponding server list; applying both filters returns servers matching both values. Filter selections survive tab navigation for the active page session.
 - TLS-enabled VMess/VLESS servers with encryption `none` or `false` remain visible with a disable reason but cannot be selected, connected, added to a proxy group, or added by the latency bulk action.
+- VMess/VLESS servers with `security=false` or `security=none` (no TLS) are universally blocked since VLESS always uses protocol encryption `none`, making plaintext traffic insecure regardless of whether the address is an IP or domain.
 - “Bulk Add by Latency” is available only while the local-server table or an individual subscription-server table is active; it is unavailable from the subscription overview and Live Flow tabs.
 - Node-management tables use responsive panel headers, count badges, filter toolbars, and empty-result states in both light and dark themes.
 

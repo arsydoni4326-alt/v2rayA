@@ -870,13 +870,15 @@ func (v *V2Ray) DisableReason(name, address string) string {
 		(strings.EqualFold(v.Protocol, "vless") || isNoneOrFalse(v.Security)) {
 		return fmt.Sprintf("[%s (%s)] TLS with encryption none or false is excluded", name, address)
 	}
-	// VLESS without TLS is excluded — VLESS always uses protocol encryption
-	// "none", so an empty TLS field means there is no transport security.
-	if strings.EqualFold(v.Protocol, "vless") && (v.TLS == "" || strings.EqualFold(v.TLS, "none")) {
+	// VLESS without TLS is always excluded — VLESS always uses protocol
+	// encryption "none", so without TLS the traffic is completely plaintext.
+	// security=false or security=none in VLESS URLs sets v.TLS to "false" or "none".
+	if strings.EqualFold(v.Protocol, "vless") && (v.TLS == "" || strings.EqualFold(v.TLS, "none") || strings.EqualFold(v.TLS, "false")) {
 		return fmt.Sprintf("[%s (%s)] VLESS without TLS is excluded", name, address)
 	}
 	// VMess without TLS but with encryption none or false is also excluded.
-	if strings.EqualFold(v.Protocol, "vmess") && (v.TLS == "" || strings.EqualFold(v.TLS, "none")) && isNoneOrFalse(v.Security) {
+	// security=false in URLs sets v.TLS to "false", which must also be caught.
+	if strings.EqualFold(v.Protocol, "vmess") && (v.TLS == "" || strings.EqualFold(v.TLS, "none") || strings.EqualFold(v.TLS, "false")) && isNoneOrFalse(v.Security) {
 		return fmt.Sprintf("[%s (%s)] VMess without TLS and encryption none or false is excluded", name, address)
 	}
 	return ""

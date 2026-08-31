@@ -45,7 +45,7 @@ Vue.js-based single-page application:
 - **State Management:** Vuex store
 - **HTTP Client:** Axios with request caching
 - **Internationalization:** Multi-language support via `locales/`
-- **Server filtering and eligibility:** `/api/touch` supplies canonical server `protocol`, `encryptions`, and optional `disableReason` metadata. `node.vue` derives dynamic options for local and per-subscription server tables in independent filter containers, retaining filter state locally per tab. TLS-enabled VMess/VLESS entries with `none` or `false` encryption remain visible but cannot be selected or connected.
+- **Server filtering and eligibility:** `/api/touch` supplies canonical server `protocol`, `encryptions`, and optional `disableReason` metadata. `node.vue` derives dynamic options for local and per-subscription server tables in independent filter containers, retaining filter state locally per tab. TLS-enabled VMess/VLESS entries with `none` or `false` encryption remain visible but cannot be selected or connected. VLESS servers without TLS (`security=false`, `security=none`, or empty TLS) are universally blocked since VLESS always uses protocol encryption `none`.
 
 **Entry Point:** `gui/src/main.js`
 
