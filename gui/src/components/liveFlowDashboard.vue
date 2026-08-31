@@ -109,17 +109,17 @@
         </defs>
 
         <g class="flow-columns">
-          <text :x="graph.sourceX" y="34" text-anchor="middle">SOURCE</text>
+          <text :x="graph.sourceX" y="28" text-anchor="middle">SOURCE</text>
           <text
             v-for="column in graph.proxyColumns"
             :key="column.index"
             :x="column.x"
-            y="34"
+            y="28"
             text-anchor="middle"
           >
             {{ column.index === 0 ? "SELECTED PROXY" : "PROXY HOP" }}
           </text>
-          <text :x="graph.destinationX" y="34" text-anchor="middle">
+          <text :x="graph.destinationX" y="28" text-anchor="middle">
             DESTINATION
           </text>
         </g>
@@ -157,17 +157,17 @@
             @click="selectNode(node)"
             @keyup.enter="selectNode(node)"
           >
-            <title>{{ node.detail }}</title>
+            <title>{{ node.tooltip }}</title>
             <rect
-              :x="node.x - 88"
-              :y="node.y - 31"
-              width="176"
-              height="62"
-              rx="10"
+              :x="node.x - 68"
+              :y="node.y - 22"
+              width="136"
+              height="44"
+              rx="8"
             />
             <text
               :x="node.x"
-              :y="node.y - 7"
+              :y="node.y - 5"
               text-anchor="middle"
               class="flow-node-title"
             >
@@ -175,12 +175,19 @@
             </text>
             <text
               :x="node.x"
-              :y="node.y + 14"
+              :y="node.y + 11"
               text-anchor="middle"
               class="flow-node-detail"
             >
               {{ node.subtitle }}
             </text>
+            <text
+              v-if="node.ports.length > 1"
+              :x="node.x + 60"
+              :y="node.y - 14"
+              class="flow-node-info"
+              @click.stop="showPortList(node)"
+            >ⓘ</text>
           </g>
         </g>
       </svg>
@@ -210,6 +217,18 @@
       </div>
     </aside>
 
+    <aside v-if="selectedNodePorts" class="flow-port-list">
+      <div class="flow-port-list__header">
+        <strong>{{ selectedNodePorts.host }}</strong>
+        <button @click="selectedNodePorts = null">✕</button>
+      </div>
+      <div class="flow-port-list__body">
+        <span v-for="port in selectedNodePorts.ports" :key="port" class="flow-port-tag">
+          {{ port }}
+        </span>
+      </div>
+    </aside>
+
     <footer class="flow-legend">
       <span><i class="legend-line active"></i> Active route</span>
       <span><i class="legend-line idle"></i> Idle route</span>
@@ -223,16 +242,15 @@
 import { mapState } from "vuex";
 
 const GRAPH_WIDTH = 1200;
-const TOP_PADDING = 82;
-const NODE_GAP = 92;
+const TOP_PADDING = 60;
+const NODE_GAP = 66;
 
 function endpointId(endpoint) {
-  return `${endpoint.domain || endpoint.ip}:${endpoint.port || 0}`;
+  return endpoint.domain || endpoint.ip;
 }
 
 function endpointLabel(endpoint) {
-  const host = endpoint.domain || endpoint.ip;
-  return endpoint.port ? `${host}:${endpoint.port}` : host;
+  return endpoint.domain || endpoint.ip;
 }
 
 function layoutNodes(nodes, x) {
@@ -249,6 +267,7 @@ export default {
     return {
       filters: { protocol: "", status: "", proxy: "" },
       selectedSessionId: "",
+      selectedNodePorts: null,
     };
   },
   computed: {
@@ -330,16 +349,18 @@ export default {
           sourceKey,
           "source",
           endpointLabel(flow.source),
-          flow.source.ip,
-          flow.session_id
+          "",
+          flow.session_id,
+          flow.source.port
         );
         this.addNode(
           destinationMap,
           destinationKey,
           "destination",
           endpointLabel(flow.destination),
-          flow.destination.ip,
-          flow.session_id
+          "",
+          flow.session_id,
+          flow.destination.port
         );
         this.flowHops(flow).forEach((proxy, index) => {
           const proxyKey = `proxy:${index}:${proxy.proxy_id}`;
@@ -354,12 +375,29 @@ export default {
         });
       });
 
+      const finalizeNode = (node) => {
+        let subtitle = "";
+        let tooltip = node.detail || node.id;
+        if (node.kind === "source" || node.kind === "destination") {
+          if (node.ports.length > 1) {
+            subtitle = `${node.ports.length} ports`;
+            tooltip = `${node.id}\nPorts: ${node.ports.join(", ")}`;
+          } else if (node.ports.length === 1) {
+            subtitle = `port ${node.ports[0]}`;
+            tooltip = `${node.id} (port ${node.ports[0]})`;
+          }
+        } else {
+          subtitle = node.detail;
+        }
+        return { ...node, subtitle, tooltip };
+      };
+
       const nodes = [
-        ...layoutNodes([...sourceMap.values()], sourceX),
+        ...layoutNodes([...sourceMap.values()].map(finalizeNode), sourceX),
         ...proxyMaps.flatMap((nodeMap, index) =>
-          layoutNodes([...nodeMap.values()], sourceX + proxyGap * (index + 1))
+          layoutNodes([...nodeMap.values()].map(finalizeNode), sourceX + proxyGap * (index + 1))
         ),
-        ...layoutNodes([...destinationMap.values()], destinationX),
+        ...layoutNodes([...destinationMap.values()].map(finalizeNode), destinationX),
       ];
       const positions = new Map(nodes.map((node) => [node.id, node]));
       const edges = [];
@@ -394,8 +432,8 @@ export default {
       return {
         width: GRAPH_WIDTH,
         height: Math.max(
-          300,
-          TOP_PADDING + (highestNodeCount - 1) * NODE_GAP + 90
+          260,
+          TOP_PADDING + (highestNodeCount - 1) * NODE_GAP + 70
         ),
         sourceX,
         destinationX,
@@ -426,12 +464,17 @@ export default {
     this.$store.dispatch("disconnectLiveFlow");
   },
   methods: {
-    addNode(nodes, id, kind, title, subtitle, sessionId) {
+    addNode(nodes, id, kind, title, detail, sessionId, port) {
       const existing = nodes.get(id);
       if (existing) {
         existing.sessionIds.push(sessionId);
+        if (port != null && port !== 0 && !existing.ports.includes(port)) {
+          existing.ports.push(port);
+          existing.ports.sort((a, b) => a - b);
+        }
       } else {
-        nodes.set(id, { id, kind, title, subtitle, sessionIds: [sessionId] });
+        const ports = port != null && port !== 0 ? [port] : [];
+        nodes.set(id, { id, kind, title, detail, ports, sessionIds: [sessionId] });
       }
     },
     flowHops(flow) {
@@ -447,9 +490,9 @@ export default {
       ];
     },
     edgePath(from, to) {
-      const startX = from.x + 88;
-      const endX = to.x - 88;
-      const curve = Math.max(48, (endX - startX) * 0.36);
+      const startX = from.x + 68;
+      const endX = to.x - 68;
+      const curve = Math.max(36, (endX - startX) * 0.36);
       return `M ${startX} ${from.y} C ${startX + curve} ${from.y}, ${
         endX - curve
       } ${to.y}, ${endX} ${to.y}`;
@@ -462,6 +505,11 @@ export default {
     },
     selectNode(node) {
       this.selectedSessionId = node.sessionIds[0] || "";
+      if (node.ports && node.ports.length > 1) {
+        this.selectedNodePorts = { host: node.id, ports: node.ports };
+      } else {
+        this.selectedNodePorts = null;
+      }
     },
     pathLabel(flow) {
       return [
@@ -508,6 +556,9 @@ export default {
     },
     dismissWarnings() {
       this.$store.commit("SET_LIVE_FLOW_WARNINGS", []);
+    },
+    showPortList(node) {
+      this.selectedNodePorts = { host: node.id, ports: node.ports };
     },
   },
 };
@@ -618,7 +669,7 @@ export default {
 }
 .flow-topology {
   overflow-x: auto;
-  min-height: 300px;
+  min-height: 260px;
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
@@ -638,7 +689,7 @@ export default {
 }
 .flow-columns text {
   fill: #8a8a8a;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -705,12 +756,59 @@ export default {
 }
 .flow-node-title {
   fill: #202124;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
 }
 .flow-node-detail {
   fill: #555;
-  font-size: 11px;
+  font-size: 10px;
+}
+.flow-node-info {
+  fill: #1976d2;
+  font-size: 12px;
+  cursor: pointer;
+}
+.flow-port-list {
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 4px solid #1976d2;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+}
+.flow-port-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.flow-port-list__header strong {
+  color: #333;
+}
+.flow-port-list__header button {
+  border: 0;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  font-size: 16px;
+}
+.flow-port-list__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.flow-port-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f5f5f5;
+  font-size: 12px;
+  font-family: monospace;
 }
 .flow-details {
   align-items: stretch;
@@ -780,12 +878,6 @@ body.theme-dark .flow-count,
 body.theme-dark .flow-legend {
   color: #cac4d0;
 }
-body.theme-dark .live-flow-controls,
-body.theme-dark .flow-topology,
-body.theme-dark .flow-details {
-  background: #211f26;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
 body.theme-dark .live-flow-controls label {
   color: #cac4d0;
 }
@@ -820,6 +912,27 @@ body.theme-dark .flow-node-detail {
 }
 body.theme-dark .flow-details strong {
   color: #938f99;
+}
+body.theme-dark .live-flow-controls,
+body.theme-dark .flow-topology,
+body.theme-dark .flow-details,
+body.theme-dark .flow-port-list {
+  background: #211f26;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+body.theme-dark .flow-node-info {
+  fill: #64b5f6;
+}
+body.theme-dark .flow-port-list__header strong {
+  color: #e6e1e5;
+}
+body.theme-dark .flow-port-list__header button {
+  color: #938f99;
+}
+body.theme-dark .flow-port-tag {
+  border-color: #49454f;
+  background: #2d2a3e;
+  color: #e6e1e5;
 }
 body.theme-dark .live-flow-warning {
   border-color: #ffb74d;
