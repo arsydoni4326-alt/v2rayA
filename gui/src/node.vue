@@ -2139,9 +2139,17 @@ export default {
       if (!this.isBulkAddByLatencyAvailable) {
         return;
       }
+      const modalProps = {};
+      if (this.tab === 1) {
+        modalProps.tabType = "server";
+      } else if (this.tab >= 2 && this.tab < this.tableData.subscriptions.length + 2) {
+        modalProps.tabType = "subscription";
+        modalProps.tabIndex = this.tab - 2;
+      }
       this.$buefy.modal.open({
         parent: this,
         component: modalBulkAddByLatency,
+        props: modalProps,
         hasModalCard: true,
         canCancel: true,
         events: {
