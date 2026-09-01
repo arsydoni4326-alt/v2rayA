@@ -139,16 +139,12 @@ export default {
       if (!this.serversToAdd.length) return;
       this.saving = true;
       try {
+        // Preserve ALL currently connected servers for this outbound,
+        // not just those from the current tab. The backend API replaces
+        // the full list, so filtering by tab here would discard servers
+        // added from other subscriptions.
         const existingTouches = this.currentConnectedServers
           .filter((w) => (w.outbound || "proxy") === this.selectedOutbound)
-          .filter((w) => {
-            if (this.tabType === "server") return (w._type || w.TYPE) === "server";
-            if (this.tabType === "subscription") {
-              return (w._type || w.TYPE) === "subscriptionServer"
-                && (w.sub != null ? w.sub : 0) === this.tabIndex;
-            }
-            return true;
-          })
           .map((w) => ({ id: w.id || w.ID, _type: w._type || w.TYPE,
             sub: (w._type || w.TYPE) === "subscriptionServer" ? (w.sub != null ? w.sub : 0) : 0,
             outbound: this.selectedOutbound }));

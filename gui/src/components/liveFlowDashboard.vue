@@ -182,12 +182,25 @@
               {{ node.subtitle }}
             </text>
             <text
-              v-if="node.ports.length > 1"
+              v-if="
+                (node.kind === 'destination' &&
+                  node.subdomains &&
+                  node.subdomains.length > 1) ||
+                (node.kind !== 'destination' && node.ports.length > 1)
+              "
               :x="node.x + 60"
               :y="node.y - 14"
               class="flow-node-info"
-              @click.stop="showPortList(node)"
-            >ⓘ</text>
+              @click.stop="
+                node.kind === 'destination' &&
+                node.subdomains &&
+                node.subdomains.length > 1
+                  ? showSubdomainList(node)
+                  : showPortList(node)
+              "
+            >
+              ⓘ
+            </text>
           </g>
         </g>
       </svg>
@@ -223,9 +236,33 @@
         <button @click="selectedNodePorts = null">✕</button>
       </div>
       <div class="flow-port-list__body">
-        <span v-for="port in selectedNodePorts.ports" :key="port" class="flow-port-tag">
+        <span
+          v-for="port in selectedNodePorts.ports"
+          :key="port"
+          class="flow-port-tag"
+        >
           {{ port }}
         </span>
+      </div>
+    </aside>
+
+    <aside v-if="selectedNodeSubdomains" class="flow-subdomain-list">
+      <div class="flow-subdomain-list__header">
+        <strong>Subdomains for {{ selectedNodeSubdomains.host }}</strong>
+        <button @click="closeSubdomainList">✕</button>
+      </div>
+      <div class="flow-subdomain-list__body">
+        <div
+          v-for="sub in selectedNodeSubdomains.subdomains"
+          :key="sub.domain"
+          class="flow-subdomain-row"
+        >
+          <span class="flow-subdomain-domain">{{ sub.domain }}</span>
+          <span v-if="sub.ports.length" class="flow-subdomain-ports">
+            port{{ sub.ports.length !== 1 ? "s" : "" }}:
+            {{ sub.ports.join(", ") }}
+          </span>
+        </div>
       </div>
     </aside>
 
@@ -244,6 +281,57 @@ import { mapState } from "vuex";
 const GRAPH_WIDTH = 1200;
 const TOP_PADDING = 60;
 const NODE_GAP = 66;
+
+const COMPOUND_TLDS = new Set([
+  "co.uk",
+  "co.jp",
+  "co.kr",
+  "co.nz",
+  "co.za",
+  "com.au",
+  "com.br",
+  "com.cn",
+  "com.co",
+  "com.mx",
+  "com.sg",
+  "com.tr",
+  "com.tw",
+  "com.vn",
+  "net.au",
+  "net.br",
+  "org.au",
+  "org.uk",
+  "or.jp",
+  "ne.jp",
+  "ac.jp",
+  "go.jp",
+  "gob.mx",
+  "edu.au",
+  "gov.uk",
+  "gov.sg",
+]);
+
+/**
+ * Extract the registrable (root) domain from a hostname.
+ *   "cdn.api.google.com"  -> "google.com"
+ *   "example.co.uk"       -> "example.co.uk"
+ *   "192.168.1.1"         -> "192.168.1.1"  (IPs pass through)
+ *   "localhost"           -> "localhost"
+ */
+function rootDomain(hostname) {
+  if (!hostname) return hostname;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return hostname;
+  if (/^[\da-f]{0,4}(:[\da-f]{0,4}){2,7}$/i.test(hostname)) return hostname;
+
+  const parts = hostname.split(".");
+  if (parts.length <= 2) return hostname;
+
+  const lastTwo = parts.slice(-2).join(".");
+  if (COMPOUND_TLDS.has(lastTwo)) {
+    return parts.length >= 3 ? parts.slice(-3).join(".") : hostname;
+  }
+  return parts.slice(-2).join(".");
+}
 
 function endpointId(endpoint) {
   return endpoint.domain || endpoint.ip;
@@ -268,6 +356,7 @@ export default {
       filters: { protocol: "", status: "", proxy: "" },
       selectedSessionId: "",
       selectedNodePorts: null,
+      selectedNodeSubdomains: null,
     };
   },
   computed: {
@@ -343,7 +432,12 @@ export default {
 
       flows.forEach((flow) => {
         const sourceKey = `source:${endpointId(flow.source)}`;
-        const destinationKey = `destination:${endpointId(flow.destination)}`;
+        const destFullId = endpointId(flow.destination);
+        const rDomain = rootDomain(destFullId);
+        const destinationKey =
+          destFullId === rDomain
+            ? `destination:${destFullId}`
+            : `destination:${rDomain}`;
         this.addNode(
           sourceMap,
           sourceKey,
@@ -353,12 +447,12 @@ export default {
           flow.session_id,
           flow.source.port
         );
-        this.addNode(
+        this.addDestinationNode(
           destinationMap,
           destinationKey,
-          "destination",
           endpointLabel(flow.destination),
-          "",
+          rDomain,
+          destFullId,
           flow.session_id,
           flow.destination.port
         );
@@ -378,8 +472,33 @@ export default {
       const finalizeNode = (node) => {
         let subtitle = "";
         let tooltip = node.detail || node.id;
-        if (node.kind === "source" || node.kind === "destination") {
+        if (node.kind === "source") {
           if (node.ports.length > 1) {
+            subtitle = `${node.ports.length} ports`;
+            tooltip = `${node.id}\nPorts: ${node.ports.join(", ")}`;
+          } else if (node.ports.length === 1) {
+            subtitle = `port ${node.ports[0]}`;
+            tooltip = `${node.id} (port ${node.ports[0]})`;
+          }
+        } else if (node.kind === "destination") {
+          const subCount = node.subdomains ? node.subdomains.length : 0;
+          if (subCount > 1) {
+            subtitle = `${subCount} subdomains`;
+            const list = node.subdomains
+              .map(
+                (s) =>
+                  `  ${s.domain}${
+                    s.ports.length ? " : " + s.ports.join(", ") : ""
+                  }`
+              )
+              .join("\n");
+            tooltip = `${node.title}\n${list}`;
+          } else if (
+            subCount === 1 &&
+            node.subdomains[0].domain !== node.title
+          ) {
+            subtitle = node.subdomains[0].domain;
+          } else if (node.ports.length > 1) {
             subtitle = `${node.ports.length} ports`;
             tooltip = `${node.id}\nPorts: ${node.ports.join(", ")}`;
           } else if (node.ports.length === 1) {
@@ -395,9 +514,15 @@ export default {
       const nodes = [
         ...layoutNodes([...sourceMap.values()].map(finalizeNode), sourceX),
         ...proxyMaps.flatMap((nodeMap, index) =>
-          layoutNodes([...nodeMap.values()].map(finalizeNode), sourceX + proxyGap * (index + 1))
+          layoutNodes(
+            [...nodeMap.values()].map(finalizeNode),
+            sourceX + proxyGap * (index + 1)
+          )
         ),
-        ...layoutNodes([...destinationMap.values()].map(finalizeNode), destinationX),
+        ...layoutNodes(
+          [...destinationMap.values()].map(finalizeNode),
+          destinationX
+        ),
       ];
       const positions = new Map(nodes.map((node) => [node.id, node]));
       const edges = [];
@@ -407,7 +532,13 @@ export default {
         this.flowHops(flow).forEach((proxy, index) =>
           nodeIds.push(`proxy:${index}:${proxy.proxy_id}`)
         );
-        nodeIds.push(`destination:${endpointId(flow.destination)}`);
+        const destFullId = endpointId(flow.destination);
+        const rDomain = rootDomain(destFullId);
+        nodeIds.push(
+          destFullId === rDomain
+            ? `destination:${destFullId}`
+            : `destination:${rDomain}`
+        );
         nodeIds.slice(1).forEach((targetId, index) => {
           const from = positions.get(nodeIds[index]);
           const to = positions.get(targetId);
@@ -474,7 +605,59 @@ export default {
         }
       } else {
         const ports = port != null && port !== 0 ? [port] : [];
-        nodes.set(id, { id, kind, title, detail, ports, sessionIds: [sessionId] });
+        nodes.set(id, {
+          id,
+          kind,
+          title,
+          detail,
+          ports,
+          sessionIds: [sessionId],
+        });
+      }
+    },
+    addDestinationNode(
+      nodes,
+      id,
+      displayTitle,
+      rootDomainName,
+      fullDomain,
+      sessionId,
+      port
+    ) {
+      const existing = nodes.get(id);
+      if (existing) {
+        existing.sessionIds.push(sessionId);
+        if (port != null && port !== 0 && !existing.ports.includes(port)) {
+          existing.ports.push(port);
+          existing.ports.sort((a, b) => a - b);
+        }
+        const sub = existing.subdomains.find((s) => s.domain === fullDomain);
+        if (sub) {
+          if (port != null && port !== 0 && !sub.ports.includes(port)) {
+            sub.ports.push(port);
+            sub.ports.sort((a, b) => a - b);
+          }
+        } else {
+          const subPorts = port != null && port !== 0 ? [port] : [];
+          existing.subdomains.push({ domain: fullDomain, ports: subPorts });
+        }
+      } else {
+        const ports = port != null && port !== 0 ? [port] : [];
+        const subdomains = [
+          {
+            domain: fullDomain,
+            ports: port != null && port !== 0 ? [port] : [],
+          },
+        ];
+        nodes.set(id, {
+          id,
+          kind: "destination",
+          title: rootDomainName,
+          detail: "",
+          ports,
+          sessionIds: [sessionId],
+          subdomains,
+        });
       }
     },
     flowHops(flow) {
@@ -505,10 +688,22 @@ export default {
     },
     selectNode(node) {
       this.selectedSessionId = node.sessionIds[0] || "";
-      if (node.ports && node.ports.length > 1) {
+      if (
+        node.kind === "destination" &&
+        node.subdomains &&
+        node.subdomains.length > 1
+      ) {
+        this.selectedNodeSubdomains = {
+          host: node.title,
+          subdomains: node.subdomains,
+        };
+        this.selectedNodePorts = null;
+      } else if (node.ports && node.ports.length > 1) {
         this.selectedNodePorts = { host: node.id, ports: node.ports };
+        this.selectedNodeSubdomains = null;
       } else {
         this.selectedNodePorts = null;
+        this.selectedNodeSubdomains = null;
       }
     },
     pathLabel(flow) {
@@ -559,6 +754,17 @@ export default {
     },
     showPortList(node) {
       this.selectedNodePorts = { host: node.id, ports: node.ports };
+      this.selectedNodeSubdomains = null;
+    },
+    showSubdomainList(node) {
+      this.selectedNodeSubdomains = {
+        host: node.title,
+        subdomains: node.subdomains,
+      };
+      this.selectedNodePorts = null;
+    },
+    closeSubdomainList() {
+      this.selectedNodeSubdomains = null;
     },
   },
 };
@@ -810,6 +1016,56 @@ export default {
   font-size: 12px;
   font-family: monospace;
 }
+.flow-subdomain-list {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 4px solid #2e7d32;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+}
+.flow-subdomain-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.flow-subdomain-list__header strong {
+  color: #333;
+}
+.flow-subdomain-list__header button {
+  border: 0;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  font-size: 16px;
+}
+.flow-subdomain-list__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.flow-subdomain-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.flow-subdomain-row:last-child {
+  border-bottom: none;
+}
+.flow-subdomain-domain {
+  color: #333;
+  font-family: monospace;
+  font-size: 13px;
+}
+.flow-subdomain-ports {
+  color: #888;
+  font-size: 12px;
+}
 .flow-details {
   align-items: stretch;
   flex-wrap: wrap;
@@ -916,23 +1172,35 @@ body.theme-dark .flow-details strong {
 body.theme-dark .live-flow-controls,
 body.theme-dark .flow-topology,
 body.theme-dark .flow-details,
-body.theme-dark .flow-port-list {
+body.theme-dark .flow-port-list,
+body.theme-dark .flow-subdomain-list {
   background: #211f26;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 body.theme-dark .flow-node-info {
   fill: #64b5f6;
 }
-body.theme-dark .flow-port-list__header strong {
+body.theme-dark .flow-port-list__header strong,
+body.theme-dark .flow-subdomain-list__header strong {
   color: #e6e1e5;
 }
-body.theme-dark .flow-port-list__header button {
+body.theme-dark .flow-port-list__header button,
+body.theme-dark .flow-subdomain-list__header button {
   color: #938f99;
 }
 body.theme-dark .flow-port-tag {
   border-color: #49454f;
   background: #2d2a3e;
   color: #e6e1e5;
+}
+body.theme-dark .flow-subdomain-row {
+  border-color: #333;
+}
+body.theme-dark .flow-subdomain-domain {
+  color: #e6e1e5;
+}
+body.theme-dark .flow-subdomain-ports {
+  color: #938f99;
 }
 body.theme-dark .live-flow-warning {
   border-color: #ffb74d;
